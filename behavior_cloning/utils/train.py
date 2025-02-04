@@ -69,7 +69,7 @@ def train_model(train_loader, val_loader, model, configs, optimizer, logger, num
                 subtask_losses = {}
                 total_loss = 0
                 for config in configs:
-                    subtask_loss = config.get_loss(output[config.name], batch)
+                    subtask_loss = config.get_loss(output[config.name], batch[config.gt_key])
                     if torch.isnan(subtask_loss):
                         continue
                     subtask_losses[config.name] = subtask_loss

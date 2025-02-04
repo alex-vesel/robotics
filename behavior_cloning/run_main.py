@@ -71,6 +71,12 @@ def main(mc, depth_camera, wrist_camera):
         num_layers=NECK_NUM_LAYERS,
         output_dim=NECK_OUTPUT_DIM,
     )
+    angle_neck = FullyConnectedNet(
+        input_dim=latent_dim_depth+latent_dim_wrist,
+        hidden_dim=NECK_HIDDEN_DIM,
+        num_layers=NECK_NUM_LAYERS,
+        output_dim=NECK_OUTPUT_DIM,
+    )
 
     configs = [
         TrainConfigModule(
@@ -79,6 +85,16 @@ def main(mc, depth_camera, wrist_camera):
             process_gnd_truth_fn=process_delta_angle,
             head=TanhRegressionHead(NECK_OUTPUT_DIM, 7),
             type='regression',
+            gt_key='delta_angle',
+            mask=None,
+        ),
+        TrainConfigModule(
+            name='angle_regression',
+            loss_fn=torch.nn.MSELoss(reduction='none'),
+            process_gnd_truth_fn=lambda x: x,
+            head=TanhRegressionHead(NECK_OUTPUT_DIM, 7),
+            type='regression',
+            gt_key='angle',
             mask=None,
         ),
         # TrainConfigModule(
@@ -91,7 +107,7 @@ def main(mc, depth_camera, wrist_camera):
         # ),
     ]
 
-    model = ImageAngleNet(backbone_depth, backbone_wrist, backbone_angle, neck, configs).to(device)
+    model = ImageAngleNet(backbone_depth, backbone_wrist, backbone_angle, neck, angle_neck, configs).to(device)
 
     # Reload model
     model.load_state_dict(torch.load(MODEL_PATH)['model_state_dict'], strict=True)
