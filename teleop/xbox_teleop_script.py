@@ -34,17 +34,16 @@ def profileit(func):
 
 # @profileit
 def update_teleop(teleop, depth_camera, wrist_camera, experiment_logger):
-    angles, was_change = teleop.update()
+    angles, angle_delta, was_change = teleop.update()
     if args.record and was_change:
         depth_frame = depth_camera.get_frame()
         wrist_frame = wrist_camera.get_frame()
-        experiment_logger.log(monotonic() - start_time, angles, depth_frame, wrist_frame)
+        experiment_logger.log(monotonic() - start_time, angles, angle_delta, depth_frame, wrist_frame)
 
 
 def run_teleop(teleop, depth_camera, wrist_camera, experiment_logger):
     while True:
         update_teleop(teleop, depth_camera, wrist_camera, experiment_logger)
-        sleep(0.2)
 
 
 if __name__ == '__main__':
@@ -63,8 +62,8 @@ if __name__ == '__main__':
 
     # main data recording loop
     while True:
-        saved_angles_paths = os.listdir(SAVED_ANGLES_DIR)
-        INITIAL_ANGLES = np.load(os.path.join(SAVED_ANGLES_DIR, np.random.choice(saved_angles_paths))).tolist()
+        # saved_angles_paths = os.listdir(SAVED_ANGLES_DIR)
+        # INITIAL_ANGLES = np.load(os.path.join(SAVED_ANGLES_DIR, np.random.choice(saved_angles_paths))).tolist()
 
         mc = MyCobot280('/dev/tty.usbmodem588D0018121',115200)
         teleop = XboxTeleop(mc, initial_angles=INITIAL_ANGLES)
@@ -82,4 +81,5 @@ if __name__ == '__main__':
         try:
             run_teleop(teleop, depth_camera, wrist_camera, experiment_logger)
         except KeyboardInterrupt:
+            sleep(1)
             pass

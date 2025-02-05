@@ -73,12 +73,12 @@ def main():
     train_augmentations = Compose([
         # VerticalFlip(p=TRAIN_AUGMENTATION_PROB["prob_vertical_flip"]),
         # HorizontalFlip(p=TRAIN_AUGMENTATION_PROB["prob_horizontal_flip"]),
-        # ColorJitter(p=0.7),
+        ColorJitter(p=0.7),
         # RandomCrop(),
     ])
 
     angle_augmentations = Compose([
-        # RandomJitter(p=1.0, jitter=0.1),
+        RandomJitter(p=1.0, jitter=0.2),
     ])
 
 
@@ -160,15 +160,15 @@ def main():
             gt_key='delta_angle',
             mask=None,
         ),
-        TrainConfigModule(
-            name='angle_regression',
-            loss_fn=torch.nn.MSELoss(reduction='none'),
-            process_gnd_truth_fn=lambda x: x,
-            head=TanhRegressionHead(NECK_OUTPUT_DIM, 7),
-            type='regression',
-            gt_key='angle',
-            mask=None,
-        ),
+        # TrainConfigModule(
+        #     name='angle_regression',
+        #     loss_fn=torch.nn.MSELoss(reduction='none'),
+        #     process_gnd_truth_fn=lambda x: x,
+        #     head=TanhRegressionHead(NECK_OUTPUT_DIM, 7),
+        #     type='regression',
+        #     gt_key='angle',
+        #     mask=None,
+        # ),
         # TrainConfigModule(
         #     name='motor_activation',
         #     loss_fn=torch.nn.BCEWithLogitsLoss(reduction='none'),
@@ -190,7 +190,7 @@ def main():
     model.print_num_params()
 
     ## Define optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     if RELOAD_MODEL:
         optimizer.load_state_dict(torch.load(MODEL_PATH)['optimizer_state_dict'])
 

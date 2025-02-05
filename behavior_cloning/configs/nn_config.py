@@ -1,7 +1,8 @@
 TRAIN_EPOCHS = 1000
 LOG_STEPS = 10
-SAVE_EPOCHS = 10
+SAVE_EPOCHS = 15
 LEARNING_RATE = 1e-5
+WEIGHT_DECAY = 1e-5
 BATCH_SIZE = 32
 
 # Fully connected angle network config

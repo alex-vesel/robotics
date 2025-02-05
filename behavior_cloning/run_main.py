@@ -1,6 +1,7 @@
 from pathlib import Path
 import sys
 import time
+from time import sleep
 import os
 import pygame
 sys.path.append(".")
@@ -88,15 +89,15 @@ def main(mc, depth_camera, wrist_camera):
             gt_key='delta_angle',
             mask=None,
         ),
-        TrainConfigModule(
-            name='angle_regression',
-            loss_fn=torch.nn.MSELoss(reduction='none'),
-            process_gnd_truth_fn=lambda x: x,
-            head=TanhRegressionHead(NECK_OUTPUT_DIM, 7),
-            type='regression',
-            gt_key='angle',
-            mask=None,
-        ),
+        # TrainConfigModule(
+        #     name='angle_regression',
+        #     loss_fn=torch.nn.MSELoss(reduction='none'),
+        #     process_gnd_truth_fn=lambda x: x,
+        #     head=TanhRegressionHead(NECK_OUTPUT_DIM, 7),
+        #     type='regression',
+        #     gt_key='angle',
+        #     mask=None,
+        # ),
         # TrainConfigModule(
         #     name='motor_activation',
         #     loss_fn=torch.nn.BCEWithLogitsLoss(reduction='none'),
@@ -110,7 +111,7 @@ def main(mc, depth_camera, wrist_camera):
     model = ImageAngleNet(backbone_depth, backbone_wrist, backbone_angle, neck, angle_neck, configs).to(device)
 
     # Reload model
-    model.load_state_dict(torch.load(MODEL_PATH)['model_state_dict'], strict=True)
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=device)['model_state_dict'], strict=False)
 
     model = model.to(device)
     model.print_num_params()
@@ -146,18 +147,19 @@ def main(mc, depth_camera, wrist_camera):
         print(angle_delta)
 
         # wait for key press
-        while True:
-            done = False
-            for event in pygame.event.get():
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_q:
-                        return
-                    elif event.key == pygame.K_s:
-                        print("Saving angles")
-                        np.save(os.path.join(SAVED_ANGLES_DIR, f'{int(time.time())}.npy'), angles)
-                    done = True
-            if done:
-                break
+        # sleep(0.1)
+        # while True:
+        #     done = False
+        #     for event in pygame.event.get():
+        #         if event.type == pygame.KEYDOWN:
+        #             if event.key == pygame.K_q:
+        #                 return
+        #             elif event.key == pygame.K_s:
+        #                 print("Saving angles")
+        #                 np.save(os.path.join(SAVED_ANGLES_DIR, f'{int(time.time())}.npy'), angles)
+        #             done = True
+        #     if done:
+        #         break
 
 
 if __name__ == '__main__':

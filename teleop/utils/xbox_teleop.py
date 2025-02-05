@@ -14,7 +14,9 @@ class XboxTeleop:
         self.global_gripper = int(initial_angles[6])
 
     def update(self):
-        # handle angles
+        prev_global_angle = self.global_angle.copy()
+        prev_global_angle.append(self.global_gripper)
+        # process
         angle_deltas, gripper_delta, return_init = self._get_controller_command()
         if return_init:
             angle_change = self.global_angle != ZERO_ANGLES
@@ -24,21 +26,33 @@ class XboxTeleop:
         else:
             self.global_angle = [current_angle + delta for current_angle, delta in zip(self.global_angle, angle_deltas)]
             angle_change = angle_deltas != [0, 0, 0, 0, 0, 0]
-        if angle_change:
-            print(self.global_angle)
-            self.mc.send_angles(self.global_angle, 30)
 
-        # handle gripper
         self.global_gripper += gripper_delta
         self.global_gripper = min(max(0, self.global_gripper), 90)
         gripper_change = gripper_delta != 0
+
+        if angle_change or gripper_change:
+            cur_global_angle = self.global_angle.copy()
+            cur_global_angle.append(self.global_gripper)
+            angle_delta = np.array(cur_global_angle) - np.array(prev_global_angle)
+        else:
+            angle_delta = None
+
+        # send commands
+        if angle_change:
+            # perturb angles randomly similar to DART
+            for i in range(6):
+                self.global_angle[i] += np.random.normal(0, 2)
+            print(self.global_angle)
+            self.mc.send_angles(self.global_angle, 30)
+
         if gripper_change:
             self.mc.set_gripper_value(self.global_gripper, 40)
 
         out = self.global_angle.copy()
         out.append(self.global_gripper)
 
-        return out, angle_change or gripper_change
+        return out, angle_delta, angle_change or gripper_change
 
 
     def _get_controller_command(self):
