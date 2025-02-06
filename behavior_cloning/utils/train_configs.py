@@ -17,16 +17,25 @@ class TrainConfigModule():
         self.mask = mask
 
 
-    def get_loss(self, outputs, y, split=None, weight=None):
+    def get_loss(self, outputs, batch, split=None, weight=None):
         if self.type == "likelihood":
             losses = self.loss_fn(outputs[:, :2], self.process_gnd_truth_fn(delta_angle), var=outputs[:, 2])
         else:
-            losses = self.loss_fn(outputs.squeeze(), self.process_gnd_truth_fn(y))
+            losses = self.loss_fn(outputs.squeeze(), self.process_gnd_truth_fn(batch[self.gt_key]))
 
         losses *= self.weight
+        if len(losses.shape) > 1:
+            losses = losses.mean(dim=1)
+
+        mask = torch.ones_like(losses)
+        for mask_fn in self.mask:
+            mask *= mask_fn(batch)
+
+        losses = losses[mask.bool()]
+        weight = weight[mask.bool()]
 
         if weight is not None:
-            losses = losses.mean(dim=1) * weight
+            losses = losses * weight
 
         return losses.mean()
 

@@ -20,34 +20,36 @@ from teleop.teleop_constants import INITIAL_ANGLES, TELEOP_DATA_DIR, SAVED_ANGLE
 parser = argparse.ArgumentParser()
 parser.add_argument('--record', type=bool, default=False)
 parser.add_argument('--experiment_name', type=str, default='default')
+parser.add_argument('--gripper_has_object', type=str, default=None)
 
-import cProfile
-def profileit(func):
-    def wrapper(*args, **kwargs):
-        datafn = func.__name__ + ".profile" # Name the data file sensibly
-        prof = cProfile.Profile()
-        retval = prof.runcall(func, *args, **kwargs)
-        prof.dump_stats(datafn)
-        return retval
+STEP_COUNT = 0
 
-    return wrapper
-
-# @profileit
-def update_teleop(teleop, depth_camera, wrist_camera, experiment_logger):
+def update_teleop(teleop, depth_camera, wrist_camera, experiment_logger, meta):
+    global STEP_COUNT
     angles, angle_delta, was_change = teleop.update()
     if args.record and was_change:
         depth_frame = depth_camera.get_frame()
         wrist_frame = wrist_camera.get_frame()
-        experiment_logger.log(monotonic() - start_time, angles, angle_delta, depth_frame, wrist_frame)
+        # don't log first 5 frames of data if gripper has object to allow for closing of gripper
+        STEP_COUNT += 1
+        if meta["gripper_has_object"] is not None and STEP_COUNT < 5:
+            return
+        experiment_logger.log(monotonic() - start_time, angles, angle_delta, depth_frame, wrist_frame, meta)
 
 
-def run_teleop(teleop, depth_camera, wrist_camera, experiment_logger):
+def run_teleop(teleop, depth_camera, wrist_camera, experiment_logger, meta):
     while True:
-        update_teleop(teleop, depth_camera, wrist_camera, experiment_logger)
+        update_teleop(teleop, depth_camera, wrist_camera, experiment_logger, meta)
 
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    if args.gripper_has_object is not None:
+        gripper_has_object = args.gripper_has_object == "True"
+    else:
+        gripper_has_object = None
+    meta = {"gripper_has_object": gripper_has_object}
+    print(meta)
 
     pygame.init()
 
@@ -79,7 +81,7 @@ if __name__ == '__main__':
         start_time = monotonic()
         r_pressed = False
         try:
-            run_teleop(teleop, depth_camera, wrist_camera, experiment_logger)
+            run_teleop(teleop, depth_camera, wrist_camera, experiment_logger, meta)
         except KeyboardInterrupt:
             sleep(1)
             pass

@@ -42,7 +42,7 @@ class XboxTeleop:
         if angle_change:
             # perturb angles randomly similar to DART
             for i in range(6):
-                self.global_angle[i] += np.random.normal(0, 2)
+                self.global_angle[i] += np.random.normal(0, 1)
             print(self.global_angle)
             self.mc.send_angles(self.global_angle, 30)
 

@@ -7,6 +7,7 @@ class FullyConnectedNet(nn.Module):
         super(FullyConnectedNet, self).__init__()
         self.fc = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
             nn.ReLU(),
             *[nn.Sequential(
                 nn.Linear(hidden_dim, hidden_dim),

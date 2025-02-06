@@ -28,6 +28,7 @@ class DataFile(Dataset):
         self.clip_name = os.path.join(*clip_path.split('/')[-2:])
         self.angle_path = os.path.join(clip_path, 'angles')
         self.angle_delta_path = os.path.join(clip_path, 'angle_delta')
+        self.meta_path = os.path.join(clip_path, 'meta')
         self.depth_frames_path = os.path.join(clip_path, 'depth_frames')
         self.rgb_frames_path = os.path.join(clip_path, 'rgb_frames')
         self.wrist_frames_path = os.path.join(clip_path, 'wrist_frames')
@@ -61,6 +62,7 @@ class DataFile(Dataset):
         wrist_frame = self.get_wrist_frame(cur_frame_name)
         angle = self.get_angle(cur_frame_name)
         next_angle = self.get_angle(next_frame_name)
+        meta = self.get_meta(cur_frame_name)
 
         if os.path.exists(self.angle_delta_path):
             delta_angle = self.get_angle_delta(next_frame_name)
@@ -81,6 +83,8 @@ class DataFile(Dataset):
             'angle': (angle / 100),
             'delta_angle': delta_angle,
             'weight': weight,
+            'gripper_has_object': int(meta['gripper_has_object']) if 'gripper_has_object' in meta else 0,
+            'gripper_has_object_mask': 1 if 'gripper_has_object' in meta else 0
         }
 
 
@@ -124,6 +128,17 @@ class DataFile(Dataset):
         angle_delta = np.loadtxt(os.path.join(self.angle_delta_path, f'{frame_name}.csv')).astype(np.float32)
 
         return angle_delta
+    
+
+    def get_meta(self, frame_name):
+        meta_path = os.path.join(self.meta_path, f'{frame_name}.json')
+        if not os.path.exists(meta_path):
+            return {}
+
+        with open(meta_path, 'r') as f:
+            meta = json.load(f)
+
+            return meta
 
 
 def aggregate_data(clip_paths, depth_frame_transform=None, wrist_frame_transform=None, angle_transform=None, augmentations=None, angle_augmentations=None, num_workers=1):
