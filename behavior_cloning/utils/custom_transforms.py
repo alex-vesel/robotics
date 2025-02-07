@@ -160,6 +160,22 @@ class ColorJitter(BaseTransform):
         return x
     
     
+class ImageShift(BaseTransform):
+    def __init__(self, p=0.0, padding=5):
+        super(ImageShift, self).__init__()
+        self.p = p
+        self.padding = padding
+
+    def __call__(self, x):
+        if np.random.rand() < self.p:
+            # pad with average value for each channel
+            x = np.pad(x, ((self.padding, self.padding), (self.padding, self.padding), (0, 0)), mode='mean')
+            shift_x = np.random.randint(-self.padding, self.padding)
+            shift_y = np.random.randint(-self.padding, self.padding)
+            x = x[self.padding + shift_y: -self.padding + shift_y, self.padding + shift_x: -self.padding + shift_x]
+        return x
+
+    
 class RandomCrop(BaseTransform):
     def __init__(self):
         super(RandomCrop, self).__init__()

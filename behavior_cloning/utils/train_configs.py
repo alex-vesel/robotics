@@ -32,9 +32,9 @@ class TrainConfigModule():
             mask *= mask_fn(batch)
 
         losses = losses[mask.bool()]
-        weight = weight[mask.bool()]
 
         if weight is not None:
+            weight = weight[mask.bool()]
             losses = losses * weight
 
         return losses.mean()

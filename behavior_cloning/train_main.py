@@ -74,6 +74,7 @@ def main():
         # VerticalFlip(p=TRAIN_AUGMENTATION_PROB["prob_vertical_flip"]),
         # HorizontalFlip(p=TRAIN_AUGMENTATION_PROB["prob_horizontal_flip"]),
         ColorJitter(p=0.7),
+        # ImageShift(p=1.0, padding=10),
         # RandomCrop(),
     ])
 
@@ -107,10 +108,10 @@ def main():
         ConcatDataset(train_datafiles),
         batch_size=BATCH_SIZE,
         shuffle=True,
-        num_workers=0,
-        # pin_memory=True,
-        # persistent_workers=True,
-        # prefetch_factor=2,
+        num_workers=4,
+        pin_memory=True,
+        persistent_workers=True,
+        prefetch_factor=2,
         drop_last=True,
     )
 
