@@ -18,6 +18,7 @@ class DataLogger:
         self.rgb_frames_dir = os.path.join(self.log_dir, 'rgb_frames')
         self.depth_frames_dir = os.path.join(self.log_dir, 'depth_frames')
         self.wrist_frames_dir = os.path.join(self.log_dir, 'wrist_frames')
+        self.angle_delta_memmap_dir = os.path.join(self.log_dir, 'angle_delta_memmap')
 
         os.makedirs(self.angles_dir, exist_ok=True)
         os.makedirs(self.angle_delta_dir, exist_ok=True)
@@ -25,6 +26,7 @@ class DataLogger:
         os.makedirs(self.rgb_frames_dir, exist_ok=True)
         os.makedirs(self.depth_frames_dir, exist_ok=True)
         os.makedirs(self.wrist_frames_dir, exist_ok=True)
+        os.makedirs(self.angle_delta_memmap_dir, exist_ok=True)
 
         # Create a queue for image logging tasks
         self.image_queue = queue.Queue()
@@ -50,6 +52,8 @@ class DataLogger:
 
     def log_angle_delta(self, time, angle_delta):
         np.savetxt(os.path.join(self.angle_delta_dir, f'{time}.csv'), angle_delta, delimiter=',')
+        angle_delta_memmap = np.memmap(os.path.join(self.angle_delta_memmap_dir, f'{time}.bin'), dtype=np.float32, mode='w+', shape=angle_delta.shape)
+        angle_delta_memmap[:] = angle_delta
 
     def log_meta(self, time, meta):
         with open(os.path.join(self.meta_dir, f'{time}.json'), 'w') as f:

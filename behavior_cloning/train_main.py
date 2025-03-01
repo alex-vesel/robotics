@@ -161,6 +161,7 @@ def main():
             mask=[
                 lambda x: x['gripper_has_object_mask'] == 0,
             ],
+            group_by='task_name',
         ),
         TrainConfigModule(
             name='gripper_has_object_classification',

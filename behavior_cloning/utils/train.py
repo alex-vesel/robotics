@@ -17,6 +17,8 @@ def train_model(train_loader, val_loader, model, configs, optimizer, scheduler, 
         model.train()
         for batch in tqdm(train_loader):
             for key in batch:
+                if type(batch[key]) == list:
+                    continue
                 batch[key] = batch[key].to(device)
 
             output = model(batch['depth_frame'], batch['wrist_frame'], batch['angle'], batch['task_description_embedding'])
@@ -24,11 +26,12 @@ def train_model(train_loader, val_loader, model, configs, optimizer, scheduler, 
             subtask_losses = {}
             total_loss = 0
             for config in configs:
-                subtask_loss = config.get_loss(output[config.name], batch, split='train', weight=batch['weight'])
-                if torch.isnan(subtask_loss):
-                    continue
-                subtask_losses[config.name] = subtask_loss
-                total_loss += subtask_loss
+                subtask_loss = config.get_loss(output[config.name], batch, split='train', weight=batch['weight'], meta={'task_name': batch['task_name']})
+                for key, loss in subtask_loss.items():
+                    if torch.isnan(loss):
+                        continue
+                    subtask_losses[key] = loss
+                    total_loss += loss
 
             if total_loss > 0:
                 subtask_losses['total_loss'] = total_loss
@@ -42,7 +45,10 @@ def train_model(train_loader, val_loader, model, configs, optimizer, scheduler, 
 
             if len(train_losses) >= log_steps:
                 # concatenate train_losses
-                for key in train_losses[0]:
+                unique_keys = set()
+                for loss in train_losses:
+                    unique_keys.update(loss.keys())
+                for key in unique_keys:
                     avg_loss = np.mean([float(loss[key].detach().cpu().numpy()) for loss in train_losses if key in loss])
                     logger.log_scalar(f'train/{key}', avg_loss, num_steps)
                 train_losses = []
@@ -59,6 +65,8 @@ def train_model(train_loader, val_loader, model, configs, optimizer, scheduler, 
         with torch.no_grad():
             for batch in val_loader:
                 for key in batch:
+                    if type(batch[key]) == list:
+                        continue
                     batch[key] = batch[key].to(device)
 
                 output = model(batch['depth_frame'], batch['wrist_frame'], batch['angle'], batch['task_description_embedding'])
@@ -66,11 +74,12 @@ def train_model(train_loader, val_loader, model, configs, optimizer, scheduler, 
                 subtask_losses = {}
                 total_loss = 0
                 for config in configs:
-                    subtask_loss = config.get_loss(output[config.name], batch)
-                    if torch.isnan(subtask_loss):
-                        continue
-                    subtask_losses[config.name] = subtask_loss
-                    total_loss += subtask_loss
+                    subtask_loss = config.get_loss(output[config.name], batch, split='train', weight=batch['weight'], meta={'task_name': batch['task_name']})
+                    for key, loss in subtask_loss.items():
+                        if torch.isnan(loss):
+                            continue
+                        subtask_losses[key] = loss
+                        total_loss += loss
 
                 if total_loss > 0:
                     subtask_losses['total_loss'] = total_loss
@@ -79,7 +88,10 @@ def train_model(train_loader, val_loader, model, configs, optimizer, scheduler, 
 
         # concatenate val_losses
         avg_losses = {}
-        for key in val_losses[0]:
+        unique_keys = set()
+        for loss in val_losses:
+            unique_keys.update(loss.keys())
+        for key in unique_keys:
             avg_loss = np.mean([float(loss[key].detach().cpu().numpy()) for loss in val_losses if key in loss])
             avg_losses[key] = avg_loss
             logger.log_scalar(f'val/{key}', avg_loss, num_steps)

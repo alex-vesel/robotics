@@ -84,6 +84,7 @@ class DataFile(Dataset):
             'angle': (angle / 100),
             'delta_angle': delta_angle,
             'task_description_embedding': task_description_embedding,
+            'task_name': meta['task_name'] if 'task_name' in meta else None,
             'weight': weight,
             'gripper_has_object': int(meta['gripper_has_object']) if 'gripper_has_object' in meta and meta['gripper_has_object'] is not None else 0,
             'gripper_has_object_mask': 1 if 'gripper_has_object' in meta and meta['gripper_has_object'] is not None else 0

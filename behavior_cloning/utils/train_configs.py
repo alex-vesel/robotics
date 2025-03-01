@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 
 def process_delta_angle(delta_angle):
@@ -10,7 +11,7 @@ def process_delta_angle(delta_angle):
 
 
 class TrainConfigModule():
-    def __init__(self, name, loss_fn, process_gnd_truth_fn, head, type, gt_key, weight=1, mask=None):
+    def __init__(self, name, loss_fn, process_gnd_truth_fn, head, type, gt_key, weight=1, mask=None, group_by=None):
         self.name = name
         self.loss_fn = loss_fn
         self.process_gnd_truth_fn = process_gnd_truth_fn
@@ -19,9 +20,10 @@ class TrainConfigModule():
         self.gt_key = gt_key
         self.weight = weight
         self.mask = mask
+        self.group_by = group_by
 
 
-    def get_loss(self, outputs, batch, split=None, weight=None):
+    def get_loss(self, outputs, batch, split=None, weight=None, meta=None):
         if self.type == "likelihood":
             losses = self.loss_fn(outputs[:, :2], self.process_gnd_truth_fn(delta_angle), var=outputs[:, 2])
         else:
@@ -41,7 +43,17 @@ class TrainConfigModule():
             weight = weight[mask.bool()]
             losses = losses * weight
 
-        return losses.mean()
+        output = {}
+        if self.group_by is not None and meta is not None:
+            # partition losses into by group by
+            group_by = np.array(meta[self.group_by])
+            for group in set(group_by):
+                group_losses = losses[group_by==group]
+                output[str(group)] = group_losses.mean()
+        else:
+            output[self.name] = losses.mean()
+
+        return output
 
 
     def __str__(self):

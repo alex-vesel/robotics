@@ -27,6 +27,7 @@ parser.add_argument('--gripper_has_object', type=str, default=None)
 
 STEP_COUNT = 0
 
+TASK_NAME = "earplug_on_container"
 TASK_DESCRIPTIONS = [
     "Place the earplug on the container.",
     "Place the earplug on top of the container.",
@@ -94,6 +95,7 @@ if __name__ == '__main__':
     meta = {
         "gripper_has_object": gripper_has_object,
         "task_description": TASK_DESCRIPTIONS if gripper_has_object is not None else None,
+        "task_name": TASK_NAME
     }
     print(meta)
 

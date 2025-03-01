@@ -78,12 +78,6 @@ def main(mc, depth_camera, wrist_camera):
         num_layers=NECK_NUM_LAYERS,
         output_dim=NECK_OUTPUT_DIM,
     )
-    angle_neck = FullyConnectedNet(
-        input_dim=latent_dim_depth+latent_dim_wrist,
-        hidden_dim=NECK_HIDDEN_DIM,
-        num_layers=NECK_NUM_LAYERS,
-        output_dim=NECK_OUTPUT_DIM,
-    )
 
     configs = [
         TrainConfigModule(
@@ -117,10 +111,10 @@ def main(mc, depth_camera, wrist_camera):
         ),
     ]
 
-    model = ImageAngleNet(backbone_depth, backbone_wrist, backbone_angle, neck, angle_neck, configs).to(device)
+    model = ImageAngleNet(backbone_depth, backbone_wrist, backbone_angle, neck, configs).to(device)
 
     # Reload model
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=device)['model_state_dict'], strict=True)
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=device)['model_state_dict'], strict=False)
 
     model = model.to(device)
     model.print_num_params()

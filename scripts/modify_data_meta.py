@@ -1,4 +1,5 @@
 import json
+import orjson
 from pathlib import Path
 import os
 import sys
@@ -29,16 +30,23 @@ TASK_DESCRIPTIONS = [
     "Pick up the orange earplug and head back to your original spot.",
 ]
 
+TASK_NAME = "earplug_return_home"
+
 for clip_path in clip_paths:
     meta_path = os.path.join(clip_path, 'meta')
     for meta_file in os.listdir(meta_path):
         with open(os.path.join(meta_path, meta_file)) as f:
-            meta = json.load(f)
+            meta = orjson.loads(f.read())
+
+        # if meta['gripper_has_object'] is not None:
+        #     meta['task_description'] = None
+        # else:
+        #     meta['task_description'] = TASK_DESCRIPTIONS
 
         if meta['gripper_has_object'] is not None:
-            meta['task_description'] = None
+            meta['task_name'] = "object_classification"
         else:
-            meta['task_description'] = TASK_DESCRIPTIONS
+            meta['task_name'] = TASK_NAME
 
         with open(os.path.join(meta_path, meta_file), 'w') as f:
             json.dump(meta, f)
