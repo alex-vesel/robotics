@@ -27,6 +27,17 @@ parser.add_argument('--gripper_has_object', type=str, default=None)
 
 STEP_COUNT = 0
 
+TASK_DESCRIPTIONS = [
+    "Place the earplug on the container.",
+    "Place the earplug on top of the container.",
+    "Place the orange earplug on the container.",
+    "Place the earplug on the white container.",
+    "Place the orange earplug on the white container.",
+    "Set the orange earplug on the white container.",
+    "Put the orange earplug onto the white container.",
+    "Position the orange earplug on top of the white container.",
+]
+
 
 def update_teleop(teleop, depth_camera, wrist_camera, experiment_loggers, meta):
     global STEP_COUNT
@@ -80,7 +91,10 @@ if __name__ == '__main__':
         gripper_has_object = args.gripper_has_object == "True"
     else:
         gripper_has_object = None
-    meta = {"gripper_has_object": gripper_has_object}
+    meta = {
+        "gripper_has_object": gripper_has_object,
+        "task_description": TASK_DESCRIPTIONS if gripper_has_object is not None else None,
+    }
     print(meta)
 
     pygame.init()

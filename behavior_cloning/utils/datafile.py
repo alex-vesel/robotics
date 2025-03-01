@@ -1,7 +1,7 @@
 import os
 import cv2
-import torch
 import json
+import hashlib
 import multiprocessing
 import numpy as np
 from pathlib import Path
@@ -12,7 +12,8 @@ from torch.utils.data import Dataset
 
 from shared_utils.path_utils import recurse_dir_for_clips
 from camera.depth_camera import DepthFrame
-
+from behavior_cloning.configs.path_config import TASK_DESCRIPTION_CACHE_PATH
+from behavior_cloning.configs.nn_config import LANGUAGE_HIDDEN_DIM
 
 class DataFile(Dataset):
     def __init__(self,
@@ -68,21 +69,21 @@ class DataFile(Dataset):
         for i in range(self.chunk_size):
             delta_angle.append(self.get_angle_delta(self.idx_to_frame_name[idx + i]))
         delta_angle = np.stack(delta_angle)
-        # delta_angle = self.get_angle_delta(cur_frame_name)
 
-        weight = 1.0
-        # upweight when gripper is closing
-        # if delta_angle[-1] < 0:
-        #     weight = 3.0
+        if 'task_description' in meta and meta['task_description'] is not None:
+            task_description = meta['task_description'][np.random.randint(len(meta['task_description']))]
+            task_description_embedding = self.get_task_description_embedding(task_description)
+        else:
+            task_description_embedding = np.zeros(LANGUAGE_HIDDEN_DIM, dtype=np.float32)
 
-        # if np.all(delta_angle == 0):
-        #     weight = 0.0
+        weight = np.float32(1.0)
 
         return {
             'depth_frame': depth_frame,
             'wrist_frame': wrist_frame,
             'angle': (angle / 100),
             'delta_angle': delta_angle,
+            'task_description_embedding': task_description_embedding,
             'weight': weight,
             'gripper_has_object': int(meta['gripper_has_object']) if 'gripper_has_object' in meta and meta['gripper_has_object'] is not None else 0,
             'gripper_has_object_mask': 1 if 'gripper_has_object' in meta and meta['gripper_has_object'] is not None else 0
@@ -146,6 +147,13 @@ class DataFile(Dataset):
             meta = json.load(f)
 
             return meta
+
+
+    def get_task_description_embedding(self, task_description):
+        description_hash = hashlib.md5(task_description.encode()).hexdigest()
+        cache_path = os.path.join(TASK_DESCRIPTION_CACHE_PATH, f'{description_hash}.npy')
+        return np.load(cache_path).astype(np.float32, copy=False)
+
 
 
 def aggregate_data(clip_paths, depth_frame_transform=None, wrist_frame_transform=None, angle_transform=None, augmentations=None, angle_augmentations=None, chunk_size=1, num_workers=1):

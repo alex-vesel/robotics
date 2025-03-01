@@ -3,19 +3,18 @@ import torch.nn as nn
 
 
 class ImageAngleNet(nn.Module):
-    def __init__(self, backbone_depth, backbone_wrist, backbone_angle, neck, angle_neck, configs):
+    def __init__(self, backbone_depth, backbone_wrist, backbone_angle, neck, configs):
         super(ImageAngleNet, self).__init__()
         self.backbone_depth = backbone_depth
         self.backbone_wrist = backbone_wrist
         self.backbone_angle = backbone_angle
         self.neck = neck
-        self.angle_neck = angle_neck
 
         self.heads = nn.ModuleDict()
         for config in configs:
             self.heads[config.name] = config.head
 
-    def forward(self, depth_frames, wrist_frames, angles):
+    def forward(self, depth_frames, wrist_frames, angles, task_description_embedding):
         depth_features = self.backbone_depth(depth_frames)
         wrist_features = self.backbone_wrist(wrist_frames)
         angle_features = self.backbone_angle(angles)
@@ -23,13 +22,12 @@ class ImageAngleNet(nn.Module):
         features = torch.cat((depth_features, wrist_features, angle_features), dim=1)
         features = self.neck(features)
 
-        angle_features = torch.cat((depth_features, wrist_features), dim=1)
-        angle_features = self.angle_neck(angle_features)
+        features_with_task_description = torch.cat((features, task_description_embedding), dim=1)
 
         output = {}
         for head_name, head in self.heads.items():
-            if head_name == 'angle_regression':
-                output[head_name] = head(angle_features)
+            if head.use_task_description:
+                output[head_name] = head(features_with_task_description)
             else:
                 output[head_name] = head(features)
 

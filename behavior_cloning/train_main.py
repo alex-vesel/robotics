@@ -149,48 +149,33 @@ def main():
         num_layers=NECK_NUM_LAYERS,
         output_dim=NECK_OUTPUT_DIM,
     )
-    angle_neck = FullyConnectedNet(
-        input_dim=latent_dim_depth+latent_dim_wrist,
-        hidden_dim=NECK_HIDDEN_DIM,
-        num_layers=NECK_NUM_LAYERS,
-        output_dim=NECK_OUTPUT_DIM,
-    )
 
     configs = [
         TrainConfigModule(
             name='delta_angle_regression',
             loss_fn=torch.nn.MSELoss(reduction='none'),
             process_gnd_truth_fn=process_delta_angle,
-            head=TanhRegressionHead(NECK_OUTPUT_DIM, 7, chunk_size=CHUNK_SIZE),
+            head=TanhRegressionHead(NECK_OUTPUT_DIM+LANGUAGE_HIDDEN_DIM, 7, chunk_size=CHUNK_SIZE, use_task_description=True),
             type='regression',
             gt_key='delta_angle',
             mask=[
                 lambda x: x['gripper_has_object_mask'] == 0,
             ],
         ),
-        # TrainConfigModule(
-        #     name='angle_regression',
-        #     loss_fn=torch.nn.MSELoss(reduction='none'),
-        #     process_gnd_truth_fn=lambda x: x,
-        #     head=TanhRegressionHead(NECK_OUTPUT_DIM, 7),
-        #     type='regression',
-        #     gt_key='angle',
-        #     mask=None,
-        # ),
         TrainConfigModule(
             name='gripper_has_object_classification',
             loss_fn=torch.nn.BCEWithLogitsLoss(reduction='none'),
             process_gnd_truth_fn=lambda x: x.float(),
-            head=BinaryClassificationHead(NECK_OUTPUT_DIM, 1),
+            head=BinaryClassificationHead(NECK_OUTPUT_DIM, 1, use_task_description=False),
             type='classification',
             gt_key='gripper_has_object',
             mask=[
                 lambda x: x['gripper_has_object_mask'] == 1,
-            ]
+            ],
         ),
     ]
 
-    model = ImageAngleNet(backbone_depth, backbone_wrist, backbone_angle, neck, angle_neck, configs).to(device)
+    model = ImageAngleNet(backbone_depth, backbone_wrist, backbone_angle, neck, configs).to(device)
 
     # Reload model
     if RELOAD_MODEL:

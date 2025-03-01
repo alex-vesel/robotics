@@ -19,10 +19,7 @@ def train_model(train_loader, val_loader, model, configs, optimizer, scheduler, 
             for key in batch:
                 batch[key] = batch[key].to(device)
 
-            output = model(batch['depth_frame'], batch['wrist_frame'], batch['angle'])
-
-            # print(output['angle_regression'][0]*6, batch['delta_angle'][0])
-            # print(output['motor_activation'][0])
+            output = model(batch['depth_frame'], batch['wrist_frame'], batch['angle'], batch['task_description_embedding'])
 
             subtask_losses = {}
             total_loss = 0
@@ -64,7 +61,7 @@ def train_model(train_loader, val_loader, model, configs, optimizer, scheduler, 
                 for key in batch:
                     batch[key] = batch[key].to(device)
 
-                output = model(batch['depth_frame'], batch['wrist_frame'], batch['angle'])
+                output = model(batch['depth_frame'], batch['wrist_frame'], batch['angle'], batch['task_description_embedding'])
 
                 subtask_losses = {}
                 total_loss = 0

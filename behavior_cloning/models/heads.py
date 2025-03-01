@@ -2,9 +2,11 @@ import torch
 import torch.nn as nn
 
 class BinaryClassificationHead(nn.Module):
-    def __init__(self, in_features, out_features=1):
+    def __init__(self, in_features, out_features=1, use_task_description=True):
         super(BinaryClassificationHead, self).__init__()
         self.in_features = in_features
+        self.out_features = out_features
+        self.use_task_description = use_task_description
         self.fc = nn.Linear(in_features, out_features)
         self.sigmoid = nn.Sigmoid()
 
@@ -16,11 +18,12 @@ class BinaryClassificationHead(nn.Module):
 
 
 class TanhRegressionHead(nn.Module):
-    def __init__(self, in_features, out_features=1, chunk_size=1):
+    def __init__(self, in_features, out_features=1, chunk_size=1, use_task_description=True):
         super(TanhRegressionHead, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
         self.chunk_size = chunk_size
+        self.use_task_description = use_task_description
         self.fc = nn.Linear(in_features, out_features*chunk_size)
         self.tanh = nn.Tanh()
 
