@@ -2,7 +2,11 @@ import torch
 
 
 def process_delta_angle(delta_angle):
-    return delta_angle / 30
+    # divide first 6 indices by 4  last by 6
+    delta_angle[:, :, :6] /= 4
+    delta_angle[:, :, 6] /= 6
+    return delta_angle
+    # return delta_angle / 6
 
 
 class TrainConfigModule():
@@ -25,7 +29,7 @@ class TrainConfigModule():
 
         losses *= self.weight
         if len(losses.shape) > 1:
-            losses = losses.mean(dim=1)
+            losses = losses.mean(dim=[1,2])
 
         mask = torch.ones_like(losses)
         for mask_fn in self.mask:

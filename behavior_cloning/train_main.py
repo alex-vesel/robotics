@@ -73,8 +73,10 @@ def main():
     train_augmentations = Compose([
         # VerticalFlip(p=TRAIN_AUGMENTATION_PROB["prob_vertical_flip"]),
         # HorizontalFlip(p=TRAIN_AUGMENTATION_PROB["prob_horizontal_flip"]),
-        ColorJitter(p=0.7),
-        # ImageShift(p=1.0, padding=10),
+        ColorJitter(p=1.0),
+        # PoissonNoise(p=0.7),
+        # ImageScale(p=0.5, max_scale=0.1),
+        # ImageShift(p=0.5, padding=10),
         # RandomCrop(),
     ])
 
@@ -91,6 +93,7 @@ def main():
         angle_transform=composed_angle_transform,
         augmentations=train_augmentations,
         angle_augmentations=angle_augmentations,
+        chunk_size=CHUNK_SIZE,
         num_workers=1,
     )
 
@@ -100,6 +103,7 @@ def main():
         wrist_frame_transform=composed_wrist_frame_transform,
         angle_transform=composed_angle_transform,
         augmentations=None,
+        chunk_size=CHUNK_SIZE,
         num_workers=1,
     )
 
@@ -108,7 +112,8 @@ def main():
         ConcatDataset(train_datafiles),
         batch_size=BATCH_SIZE,
         shuffle=True,
-        num_workers=4,
+        # num_workers = 0,
+        num_workers=12,
         pin_memory=True,
         persistent_workers=True,
         prefetch_factor=2,
@@ -156,7 +161,7 @@ def main():
             name='delta_angle_regression',
             loss_fn=torch.nn.MSELoss(reduction='none'),
             process_gnd_truth_fn=process_delta_angle,
-            head=TanhRegressionHead(NECK_OUTPUT_DIM, 7),
+            head=TanhRegressionHead(NECK_OUTPUT_DIM, 7, chunk_size=CHUNK_SIZE),
             type='regression',
             gt_key='delta_angle',
             mask=[
@@ -200,6 +205,9 @@ def main():
     if RELOAD_MODEL:
         optimizer.load_state_dict(torch.load(MODEL_PATH)['optimizer_state_dict'])
 
+    # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=4, threshold=1e-4)
+
     ## Train model
     logger = ExperimentLogger(logdir=EXPERIMENT_RESULTS_DIR)
 
@@ -209,6 +217,7 @@ def main():
         model=model,
         configs=configs,
         optimizer=optimizer,
+        scheduler=scheduler,
         logger=logger,
         num_epochs=TRAIN_EPOCHS,
         log_steps=LOG_STEPS,

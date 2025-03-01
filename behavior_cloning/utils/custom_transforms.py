@@ -17,7 +17,7 @@ class ToFloat(BaseTransform):
 
     def __call__(self, x):
         if self.pytorch:
-            return x.astype(np.float32)
+            return x.astype(np.float32, copy=False)
         else:
             return float(x)
 
@@ -51,7 +51,13 @@ class NormalizeToRange(BaseTransform):
         self.new_max = new_max
 
     def __call__(self, x):
-        return (x - self.prev_min) / (self.prev_max - self.prev_min) * (self.new_max - self.new_min) + self.new_min
+        # return (x - self.prev_min) / (self.prev_max - self.prev_min) * (self.new_max - self.new_min) + self.new_min
+        # same as above but using inplace operations
+        x -= self.prev_min
+        x /= (self.prev_max - self.prev_min)
+        x *= (self.new_max - self.new_min)
+        x += self.new_min
+        return x
 
 
 class ResizeImage(BaseTransform):
@@ -97,7 +103,7 @@ class ClampToMax(BaseTransform):
         self.max_val = max_val
 
     def __call__(self, x):
-        return np.clip(x, x.min(), self.max_val)
+        return np.clip(x, x.min(), self.max_val, out=x)
 
 
 class VerticalFlip(BaseTransform):
@@ -137,13 +143,13 @@ class ColorJitter(BaseTransform):
 
     def __call__(self, x):
         if np.random.rand() < self.p:
-            random_hue_factor = np.random.uniform(0.8, 1.2)
-            random_saturation_factor = np.random.uniform(0.8, 1.2)
-            random_value_factor = np.random.uniform(0.8, 1.2)
+            random_hue_factor = np.random.uniform(0.95, 1.05)
+            random_saturation_factor = np.random.uniform(0.5, 1.5)
+            random_value_factor = np.random.uniform(0.4, 1.6)
 
             img = x
 
-            img = img.astype(np.float32)
+            img = img.astype(np.float32, copy=False)
             # put channels last
             # img = np.moveaxis(img, 0, -1)
 
@@ -154,9 +160,34 @@ class ColorJitter(BaseTransform):
             img[:, :, 2] *= random_value_factor
             img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
             # clip
-            img = np.clip(img, 0, 255)
+            img = np.clip(img, 0, 255, out=img)
 
-            x[:, :, :3] = img
+            # show original and jittered image side by side
+            # import matplotlib.pyplot as plt
+
+            # fig, ax = plt.subplots(1, 2)
+            # ax[0].imshow(x[:, :, :3].astype(np.uint8))
+            # ax[1].imshow(img.astype(np.uint8))
+            # plt.show()
+
+
+            x[:, :, :3] = img.astype(np.uint8, copy=False)
+        return x
+
+
+class PoissonNoise(BaseTransform):
+    # additive noise to first 3 channels
+    def __init__(self, p=0.0, mean=2):
+        super(PoissonNoise, self).__init__()
+        self.p = p
+        self.mean = mean
+
+    def __call__(self, x):
+        if np.random.rand() < self.p:
+            noise_map = np.random.poisson(self.mean, x.shape[:-1]).astype(type(x[0, 0, 0]))
+            x[:, :, :3] += noise_map[..., np.newaxis]
+            x[:, :, :3] = np.clip(x[:, :, :3], 0, 255, out=x[:, :, :3])
+
         return x
     
     
@@ -173,6 +204,23 @@ class ImageShift(BaseTransform):
             shift_x = np.random.randint(-self.padding, self.padding)
             shift_y = np.random.randint(-self.padding, self.padding)
             x = x[self.padding + shift_y: -self.padding + shift_y, self.padding + shift_x: -self.padding + shift_x]
+        return x
+
+
+class ImageScale(BaseTransform):
+    def __init__(self, p=0.0, max_scale=0.05):
+        super(ImageScale, self).__init__()
+        self.p = p
+        self.max_scale = max_scale
+
+    def __call__(self, x):
+        if np.random.rand() < self.p:
+            scale = 1 + np.random.uniform(-self.max_scale, self.max_scale)
+            orig_size = x.shape[:2]
+            x = cv2.resize(x, None, fx=scale, fy=scale)
+            # center crop
+            x = x[(x.shape[0] - orig_size[0]) // 2: (x.shape[0] + orig_size[0]) // 2,
+                  (x.shape[1] - orig_size[1]) // 2: (x.shape[1] + orig_size[1]) // 2]
         return x
 
     

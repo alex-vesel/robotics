@@ -8,7 +8,7 @@ import numpy as np
 from behavior_cloning.configs.nn_config import *
 
 
-def train_model(train_loader, val_loader, model, configs, optimizer, logger, num_epochs=100, log_steps=10, device='cpu'):
+def train_model(train_loader, val_loader, model, configs, optimizer, scheduler, logger, num_epochs=100, log_steps=10, device='cpu'):
     num_steps = 0
     train_losses = []
     for epoch in range(num_epochs):
@@ -21,7 +21,7 @@ def train_model(train_loader, val_loader, model, configs, optimizer, logger, num
 
             output = model(batch['depth_frame'], batch['wrist_frame'], batch['angle'])
 
-            # print(output['angle_regression'][0]*30, batch['delta_angle'][0])
+            # print(output['angle_regression'][0]*6, batch['delta_angle'][0])
             # print(output['motor_activation'][0])
 
             subtask_losses = {}
@@ -81,10 +81,18 @@ def train_model(train_loader, val_loader, model, configs, optimizer, logger, num
                 val_losses.append(subtask_losses)
 
         # concatenate val_losses
+        avg_losses = {}
         for key in val_losses[0]:
             avg_loss = np.mean([float(loss[key].detach().cpu().numpy()) for loss in val_losses if key in loss])
+            avg_losses[key] = avg_loss
             logger.log_scalar(f'val/{key}', avg_loss, num_steps)
 
         # save model
         if epoch % SAVE_EPOCHS == 0:
             logger.save_model(model, optimizer, 'model', num_steps)
+
+        if scheduler:
+            if type(scheduler) == torch.optim.lr_scheduler.ReduceLROnPlateau:
+                scheduler.step(avg_losses['total_loss'])
+            else:
+                scheduler.step()

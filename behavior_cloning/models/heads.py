@@ -16,15 +16,18 @@ class BinaryClassificationHead(nn.Module):
 
 
 class TanhRegressionHead(nn.Module):
-    def __init__(self, in_features, out_features=1):
+    def __init__(self, in_features, out_features=1, chunk_size=1):
         super(TanhRegressionHead, self).__init__()
         self.in_features = in_features
-        self.fc = nn.Linear(in_features, out_features)
+        self.out_features = out_features
+        self.chunk_size = chunk_size
+        self.fc = nn.Linear(in_features, out_features*chunk_size)
         self.tanh = nn.Tanh()
 
     def forward(self, x):
         x = self.fc(x)
         x = self.tanh(x)
+        x = x.view(-1, self.chunk_size, self.out_features)
         return x
     
 

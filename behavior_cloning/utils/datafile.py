@@ -22,6 +22,7 @@ class DataFile(Dataset):
                  angle_transform=None,
                  augmentations=None,
                  angle_augmentations=None,
+                 chunk_size=1,
                 ):
 
         self.clip_path = clip_path
@@ -36,6 +37,7 @@ class DataFile(Dataset):
         self.wrist_frame_transform = wrist_frame_transform
         self.augmentations = augmentations
         self.angle_augmentations = angle_augmentations
+        self.chunk_size = chunk_size
 
         self.idx_to_frame_name = OrderedDict()
         # path names are float, so we need to sort them as floats
@@ -45,8 +47,7 @@ class DataFile(Dataset):
         
 
     def __len__(self):
-        return len(os.listdir(self.angle_path)) - 1
-
+        return max(len(os.listdir(self.angle_path)) - self.chunk_size, 0)
 
     def __getitem__(self, idx):
         # check if idx is within bounds
@@ -61,21 +62,21 @@ class DataFile(Dataset):
         depth_frame = self.get_depth_frame(cur_frame_name)
         wrist_frame = self.get_wrist_frame(cur_frame_name)
         angle = self.get_angle(cur_frame_name)
-        next_angle = self.get_angle(next_frame_name)
         meta = self.get_meta(cur_frame_name)
 
-        if os.path.exists(self.angle_delta_path):
-            delta_angle = self.get_angle_delta(next_frame_name)
-        else:
-            delta_angle = next_angle - angle
+        delta_angle = []
+        for i in range(self.chunk_size):
+            delta_angle.append(self.get_angle_delta(self.idx_to_frame_name[idx + i]))
+        delta_angle = np.stack(delta_angle)
+        # delta_angle = self.get_angle_delta(cur_frame_name)
 
         weight = 1.0
         # upweight when gripper is closing
-        if delta_angle[-1] < 0:
-            weight = 3.0
+        # if delta_angle[-1] < 0:
+        #     weight = 3.0
 
-        if np.all(delta_angle == 0):
-            weight = 0.0
+        # if np.all(delta_angle == 0):
+        #     weight = 0.0
 
         return {
             'depth_frame': depth_frame,
@@ -89,7 +90,8 @@ class DataFile(Dataset):
 
 
     def get_depth_frame(self, frame_name):
-        rgb_frame = cv2.imread(os.path.join(self.rgb_frames_path, f'{frame_name}.png'))
+        bgr_frame = cv2.imread(os.path.join(self.rgb_frames_path, f'{frame_name}.png'))
+        rgb_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
         depth_frame = cv2.imread(os.path.join(self.depth_frames_path, f'{frame_name}.png'), cv2.IMREAD_ANYDEPTH)
 
         frame = DepthFrame.create_depth_frame(rgb_frame, depth_frame).get_frame()
@@ -116,7 +118,9 @@ class DataFile(Dataset):
     
 
     def get_angle(self, frame_name):
-        angle = np.loadtxt(os.path.join(self.angle_path, f'{frame_name}.csv')).astype(np.float32)
+        # angle = np.loadtxt(os.path.join(self.angle_path, f'{frame_name}.csv')).astype(np.float32)
+        with open(os.path.join(self.angle_path, f'{frame_name}.csv'), 'r') as f:
+            angle = np.array([float(line) for line in f.readlines()]).astype(np.float32)
 
         if self.angle_augmentations:
             angle = self.angle_augmentations(angle)
@@ -125,7 +129,10 @@ class DataFile(Dataset):
     
 
     def get_angle_delta(self, frame_name):
-        angle_delta = np.loadtxt(os.path.join(self.angle_delta_path, f'{frame_name}.csv')).astype(np.float32)
+        # angle_delta = np.loadtxt(os.path.join(self.angle_delta_path, f'{frame_name}.csv')).astype(np.float32)
+        # same as above but faster
+        with open(os.path.join(self.angle_delta_path, f'{frame_name}.csv'), 'r') as f:
+            angle_delta = np.array([float(line) for line in f.readlines()]).astype(np.float32)
 
         return angle_delta
     
@@ -141,14 +148,14 @@ class DataFile(Dataset):
             return meta
 
 
-def aggregate_data(clip_paths, depth_frame_transform=None, wrist_frame_transform=None, angle_transform=None, augmentations=None, angle_augmentations=None, num_workers=1):
+def aggregate_data(clip_paths, depth_frame_transform=None, wrist_frame_transform=None, angle_transform=None, augmentations=None, angle_augmentations=None, chunk_size=1, num_workers=1):
     data = []
     if num_workers > 1:
         with multiprocessing.Pool(num_workers) as pool:
-            pool.starmap(DataFile, [(clip_path, depth_frame_transform, wrist_frame_transform, angle_transform, augmentations, angle_augmentations) for clip_path in clip_paths])
+            pool.starmap(DataFile, [(clip_path, depth_frame_transform, wrist_frame_transform, angle_transform, augmentations, angle_augmentations, chunk_size) for clip_path in clip_paths])
     else:
         for clip_path in clip_paths:
-            datafile = DataFile(clip_path, depth_frame_transform, wrist_frame_transform, angle_transform, augmentations, angle_augmentations)
+            datafile = DataFile(clip_path, depth_frame_transform, wrist_frame_transform, angle_transform, augmentations, angle_augmentations, chunk_size)
             data.append(datafile)
 
     return data
