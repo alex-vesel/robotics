@@ -216,7 +216,7 @@ class TeachingTest(Helper):
 
 
 if __name__ == "__main__":
-    mc = MyCobot280('/dev/tty.usbmodem588D0018121',115200)
+    mc = MyCobot280('/dev/tty.usbserial-588D0018121',115200)
 
     # start the get_angles thread
     ga_class = get_angles(mc)

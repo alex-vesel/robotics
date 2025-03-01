@@ -61,11 +61,14 @@ class NormalizeToRange(BaseTransform):
 
 
 class ResizeImage(BaseTransform):
-    def __init__(self, shape):
+    def __init__(self, shape=None, mode=None):
         super(ResizeImage, self).__init__()
         self.shape = shape
+        self.mode = mode
 
     def __call__(self, x):
+        if self.mode == 'half':
+            return cv2.resize(x, (x.shape[1]//2, x.shape[0]//2))
         return cv2.resize(x, self.shape)
 
 

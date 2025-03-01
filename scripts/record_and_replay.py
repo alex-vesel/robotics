@@ -201,7 +201,7 @@ def profileit(func):
 #     mc.send_angles([0, 0, 0, 0, 50, 0], 20)
 
 if __name__ == "__main__":
-    mc = MyCobot280('/dev/tty.usbmodem588D0018121',115200)
+    mc = MyCobot280('/dev/tty.usbserial-588D0018121',115200)
     # send_angle_test(mc)
     # exit()
     # import IPython; IPython.embed(); exit(0)

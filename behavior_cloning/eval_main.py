@@ -3,6 +3,8 @@ import sys
 sys.path.append(".")
 
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from torchvision.transforms import Compose
 from torch.utils.data import DataLoader, ConcatDataset
 
@@ -25,6 +27,8 @@ np.random.seed(0)
 device = 'mps' if torch.backends.mps.is_available() else 'cpu'
 device = torch.device('cuda' if torch.cuda.is_available() else device)
 
+DATA_DIR = "./run_data"
+
 ## Get clip list
 def main():
     data_path = Path(DATA_DIR)
@@ -41,6 +45,7 @@ def main():
     val_clips.extend(dedicated_val_clips)
     # remove blacklist
     # train_clips = [clip for clip in train_clips if not any([blacklist_file in clip for blacklist_file in BLACKLIST_FILES])]
+    val_clips = train_clips
 
     ## Define transforms
     frame_transform_list = [
@@ -121,30 +126,49 @@ def main():
         num_layers=NECK_NUM_LAYERS,
         output_dim=NECK_OUTPUT_DIM,
     )
+    angle_neck = FullyConnectedNet(
+        input_dim=latent_dim_depth+latent_dim_wrist,
+        hidden_dim=NECK_HIDDEN_DIM,
+        num_layers=NECK_NUM_LAYERS,
+        output_dim=NECK_OUTPUT_DIM,
+    )
 
     configs = [
         TrainConfigModule(
-            name='angle_regression',
+            name='delta_angle_regression',
             loss_fn=torch.nn.MSELoss(reduction='none'),
             process_gnd_truth_fn=process_delta_angle,
             head=TanhRegressionHead(NECK_OUTPUT_DIM, 7),
             type='regression',
+            gt_key='delta_angle',
             mask=None,
         ),
         # TrainConfigModule(
-        #     name='motor_activation',
-        #     loss_fn=torch.nn.BCEWithLogitsLoss(reduction='none'),
-        #     process_gnd_truth_fn=lambda x: (x!=0).float(),
-        #     head=BinaryClassificationHead(NECK_OUTPUT_DIM, 7),
-        #     type='classification',
+        #     name='angle_regression',
+        #     loss_fn=torch.nn.MSELoss(reduction='none'),
+        #     process_gnd_truth_fn=lambda x: x,
+        #     head=TanhRegressionHead(NECK_OUTPUT_DIM, 7),
+        #     type='regression',
+        #     gt_key='angle',
         #     mask=None,
         # ),
+        TrainConfigModule(
+            name='gripper_has_object_classification',
+            loss_fn=torch.nn.BCEWithLogitsLoss(reduction='none'),
+            process_gnd_truth_fn=lambda x: x.float(),
+            head=BinaryClassificationHead(NECK_OUTPUT_DIM, 1),
+            type='classification',
+            gt_key='gripper_has_object',
+            mask=[
+                lambda x: x['gripper_has_object_mask'] == 1,
+            ]
+        ),
     ]
 
-    model = ImageAngleNet(backbone_depth, backbone_wrist, backbone_angle, neck, configs).to(device)
+    model = ImageAngleNet(backbone_depth, backbone_wrist, backbone_angle, neck, angle_neck, configs).to(device)
 
     # Reload model
-    model.load_state_dict(torch.load(MODEL_PATH)['model_state_dict'], strict=False)
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=device)['model_state_dict'], strict=True)
                                     
     model = model.to(device)
     model.print_num_params()
@@ -152,6 +176,7 @@ def main():
     model.eval()
 
     for datafile in val_datafiles:
+        outputs = []
         print(datafile.clip_name)
         for i in range(len(datafile)):
             batch = datafile[i]
@@ -161,14 +186,32 @@ def main():
             output = model(batch['depth_frame'].unsqueeze(0), batch['wrist_frame'].unsqueeze(0), batch['angle'].unsqueeze(0))
 
             # print(batch['angle']*100)
-            print(output['angle_regression'][0]*30)
-            print(batch['delta_angle'])
+            # print(output['delta_angle_regression'][0]*6)
+            # outputs.append(output['delta_angle_regression'][0]*6)
+            angle_delta = output['delta_angle_regression'][0]
+            angle_delta[:6] = angle_delta[:6] * 4
+            angle_delta[6] = angle_delta[6] * 6
+            outputs.append(angle_delta)
+            print("Gripper has object p: ", float(F.sigmoid(output['gripper_has_object_classification']).detach().cpu().numpy()))
 
-            mse = torch.mean((output['angle_regression'][0] - batch['delta_angle'] / 30)**2)
-            print(mse)
+            # mse = torch.mean((output['delta_angle_regression'][0] - batch['delta_angle'] / 30)**2)
+            # print(mse)
 
-        exit()
+        # exit()
+        # get std
+        outputs = torch.stack(outputs)
+        print(outputs.mean(dim=0))
+        print(outputs.std(dim=0))
 
+    # 55794 mean: -0.0115, -0.2965 std: tensor([0.0884, 0.0944, 0.0664, 0.0647, 0.0490, 0.0434, 0.0998]
+    # 55794_1 mean: 0.0062, -1.1597 std:tensor([0.0917, 0.1457, 0.0696, 0.0646, 0.0423, 0.0469, 0.1055]
+    # 75326 mean: -0.6711, -0.3503 std: tensor([0.1454, 0.2085, 0.0753, 0.0654, 0.0698, 0.0954, 0.1589]
+    # 113679 mean: tensor([-0.0044, -1.7394, -0.0913, -0.0759, -0.1218,  0.0166, -0.0844],
+    #        std:    tensor([0.1520, 0.1807, 0.0392, 0.0361, 0.0756, 0.0735, 0.0814]
+    # 113679_aug mean: tensor([-0.0778, -1.5708, -0.0282, -0.0139,  0.1323, -0.1585,  0.1313]
+    #                std tensor([0.1036, 0.1293, 0.0308, 0.0411, 0.0613, 0.0570, 0.1226]
+        # no autoexpose tensor([ 0.4023, -1.6118,  0.0245, -0.0289,  0.0271,  0.0497, -0.0495],
+        # tensor([0.0609, 0.1000, 0.0254, 0.0226, 0.0239, 0.0334, 0.0679],
 
 if __name__ == '__main__':
     main()

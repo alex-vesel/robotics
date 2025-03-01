@@ -43,10 +43,15 @@ class Camera():
 
 if __name__ == '__main__':
     camera = Camera()
+    prev_frame = None
     while True:
         frame = camera.get_frame().extract_rgb_frame()
         frame = cv2.resize(frame, (640, 480))
+        # if prev_frame is not None:
+        #     diff = cv2.absdiff(frame, prev_frame)
+        #     cv2.imshow('frame', diff)
         cv2.imshow('frame', frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
+        prev_frame = frame
     cv2.destroyAllWindows()

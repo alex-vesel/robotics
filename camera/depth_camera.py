@@ -1,6 +1,8 @@
 import pyrealsense2 as rs
 import numpy as np
 import matplotlib.pyplot as plt
+from time import monotonic
+import cv2
 
 
 class DepthFrame():
@@ -8,13 +10,16 @@ class DepthFrame():
         self.frame = frame
     
     def extract_bgr_frame(self):
-        return self.frame[:, :, :3].astype(np.uint8)
-    
-    def extract_rgb_frame(self):
         return self.frame[:, :, :3][:, :, ::-1].astype(np.uint8)
+
+    def extract_rgb_frame(self):
+        return self.frame[:, :, :3].astype(np.uint8)
     
     def extract_depth_frame(self):
         return self.frame[:, :, -1].astype(np.uint16)
+
+    def swap_rgb(self):
+        self.frame[:, :, :3] = self.frame[:, :, :3][:, :, ::-1]
 
     def render_frame(self):
         # show both rgb and depth images
@@ -39,18 +44,16 @@ class DepthCamera():
     def __init__(self):
         self.pipeline = rs.pipeline()
         config = rs.config()
-        config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-        config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-        self.pipeline.start(config)
+        config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 60)
+        config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 60)
+        profile = self.pipeline.start(config)
+
+        # turn off autoexposure to remove noise
+        depth_sensor = profile.get_device().query_sensors()[1]
+        depth_sensor.set_option(rs.option.enable_auto_exposure, False)
 
         align_to = rs.stream.color
         self.align = rs.align(align_to)
-
-        # ctx = rs.context()
-        # devices = ctx.query_devices()
-        # for dev in devices:
-        #     dev.hardware_reset()
-
 
     def get_frame(self):
         frame = self.pipeline.wait_for_frames()
@@ -71,6 +74,21 @@ class DepthCamera():
 
 if __name__ == "__main__":
     depth_camera = DepthCamera()
+    prev_frame = None
     while True:
         frame = depth_camera.get_frame()
-        frame.render_frame()
+        # if prev_frame is not None:
+        #     # cv2 render difference
+        #     # diff = cv2.absdiff(frame.extract_rgb_frame(), prev_frame.extract_rgb_frame())
+        #     diff = cv2.absdiff(frame.extract_depth_frame(), prev_frame.extract_depth_frame())
+        #     cv2.imshow("diff", diff / 1000)
+        #     if cv2.waitKey(1) & 0xFF == ord('q'):
+        #         break
+        # render rgb frame
+        # cv2.imshow("rgb", frame.extract_rgb_frame())
+        cv2.imshow("depth", frame.extract_depth_frame() / 1000)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+        prev_frame = frame
+        # frame.render_frame()
