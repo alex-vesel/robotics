@@ -55,7 +55,7 @@ class XboxTeleop:
         if self.angle_change:
             # perturb angles randomly similar to DART
             for i in range(6):
-                self.global_angle[i] += np.random.normal(0.0, 0.2)
+                self.global_angle[i] += np.random.normal(0.0, 0.6)
             self.global_angle[1] = min(max(-130, self.global_angle[1]), 100)
 
         # if gripper_change:

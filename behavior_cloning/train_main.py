@@ -112,12 +112,12 @@ def main():
         ConcatDataset(train_datafiles),
         batch_size=BATCH_SIZE,
         shuffle=True,
-        # num_workers = 0,
-        num_workers=12,
-        pin_memory=True,
-        persistent_workers=True,
-        prefetch_factor=2,
-        drop_last=True,
+        num_workers = 0,
+        # num_workers=12,
+        # pin_memory=True,
+        # persistent_workers=True,
+        # prefetch_factor=2,
+        # drop_last=True,
     )
 
     val_loader = DataLoader(

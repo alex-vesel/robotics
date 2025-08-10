@@ -6,7 +6,11 @@
 #
 
 import torch
+import torchvision
 import torch.nn as nn
+from pytorch_tools.modules.bifpn import BiFPN
+
+from collections import OrderedDict
 
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
@@ -233,6 +237,7 @@ class ResNet(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, num_out_filters, layers[0])
+        list_num_out_filters = [num_out_filters * 2 ** i for i in range(4)]
         num_out_filters *= 2
         self.layer2 = self._make_layer(
             block,
@@ -259,6 +264,11 @@ class ResNet(nn.Module):
             last_activation=last_activation,
         )
         self.avgpool = nn.AdaptiveAvgPool2d(avg_pool_shape)
+        # self.fpn = torchvision.ops.FeaturePyramidNetwork(list_num_out_filters, 64)
+        # use bifpn
+        list_num_out_filters = list_num_out_filters[::-1]
+        self.fpn = BiFPN(list_num_out_filters, 128)
+        self.final_bn = nn.BatchNorm1d(num_out_filters * avg_pool_shape[0] * avg_pool_shape[1])
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -336,17 +346,22 @@ class ResNet(nn.Module):
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
+        x1 = self.layer1(x)
+        x2 = self.layer2(x1)
+        x3 = self.layer3(x2)
+        x4 = self.layer4(x3)
 
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
+        fpn_features = self.fpn([x4, x3, x2, x1])
+        
+        fpn0 = fpn_features[0]
 
-        return x
+        # x = self.avgpool(x)
+        out = torch.flatten(fpn0, 1)
+        # x = self.final_bn(x)
+
+        return out
     
-    
+
 class SimpleCNN(nn.Module):
     def __init__(self):
         super(SimpleCNN, self).__init__()
@@ -401,7 +416,7 @@ def resnet10half(**kwargs):
     
 
 def resnet10(**kwargs):
-    return ResNet(BasicBlock, [1, 1, 1, 1], **kwargs), 512
+    return ResNet(BasicBlock, [1, 1, 1, 1], **kwargs), 512*kwargs['avg_pool_shape'][0]*kwargs['avg_pool_shape'][1]
 
 
 def resnet18(**kwargs):

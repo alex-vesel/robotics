@@ -182,3 +182,6 @@ teleop/data_move_to_earplug/
 teleop/saved_angles/
 teleop/data_wrist/
 .DS_Store
+teleop/data_wrist_presave/
+*.pth
+run_data/

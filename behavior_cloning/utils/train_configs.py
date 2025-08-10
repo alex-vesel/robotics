@@ -46,7 +46,7 @@ class TrainConfigModule():
         output = {}
         if self.group_by is not None and meta is not None:
             # partition losses into by group by
-            group_by = np.array(meta[self.group_by])
+            group_by = np.array(meta[self.group_by])[mask.bool()]
             for group in set(group_by):
                 group_losses = losses[group_by==group]
                 output[str(group)] = group_losses.mean()

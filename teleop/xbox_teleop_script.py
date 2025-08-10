@@ -27,17 +27,144 @@ parser.add_argument('--gripper_has_object', type=str, default=None)
 
 STEP_COUNT = 0
 
-TASK_NAME = "earplug_on_container"
-TASK_DESCRIPTIONS = [
-    "Place the earplug on the container.",
-    "Place the earplug on top of the container.",
-    "Place the orange earplug on the container.",
-    "Place the earplug on the white container.",
-    "Place the orange earplug on the white container.",
-    "Set the orange earplug on the white container.",
-    "Put the orange earplug onto the white container.",
-    "Position the orange earplug on top of the white container.",
-]
+# TASK_NAME = "earplug_on_container"
+# TASK_DESCRIPTIONS = [
+#     "Place the earplug on the container and then return home.",
+#     "Place the earplug on top of the container and then return home.",
+#     "Place the orange earplug on the container and then return home.",
+#     "Place the earplug on the white container and then return home.",
+#     "Place the orange earplug on the white container and then return to the starting position.",
+#     "Set the orange earplug on the white container and then return to the starting position.",
+#     "Put the orange earplug onto the white container and then return to the starting position.",
+#     "Position the orange earplug on top of the white container and then return to the starting position.",
+# ]
+
+TASK_NAME = "earplug_return_home"
+TASK_DESCRIPTIONS = ["Pick up the earplug and return home.", "Pick up the orange earplug and return home.", "Pick up the earplug and return to your starting position.", "Pick up the orange earplug and return to your starting position.", "Pick up the earplug and return to the starting position.", "Pick up the orange earplug and return to the starting position.", "Pick up the earplug and return to the starting position.", "Grab the earplug and head back home.", "Pick up the orange earplug and make your way home.", "Take the earplug and return to your starting location.", "Pick up the orange earplug and go back to your starting point.", "Grab the earplug and head back to your starting position.", "Pick up the orange earplug and return to the starting position.", "Pick up the earplug and return to where you started.", "Pick up the orange earplug and head back to your original spot."]
+
+# TASK_NAME = "smiski_in_bowl"
+# TASK_DESCRIPTIONS = [
+#     "Place the smiski in the bowl and then return home.",
+#     "Place the smiski in the bowl and then return to the starting position.",
+#     "Place the green humanoid in the bowl and then return home.",
+#     "Place the green humanoid in the bowl and then return to the starting position.",
+#     "Place the humanoid in the bowl and then return home.",
+#     "Place the humanoid in the bowl and then return to the starting position.",
+#     "Pick up the smiski and place it in the bowl and then return home.",
+#     "Pick up the smiski and place it in the bowl and then return to the starting position.",
+#     "Pick up the green humanoid and place it in the bowl and then return home.",
+#     "Pick up the green humanoid and place it in the bowl and then return to the starting position.",
+#     "Pick up the humanoid and place it in the bowl and then return home.",
+#     "Pick up the humanoid and place it in the bowl and then return to the starting position.",
+#     "Place the smiski in the bowl and then return to the starting position.",
+#     "Put the smiski in the bowl and then return home.",
+#     "Put the green humanoid in the bowl and then return to the starting position.",
+#     "Place the smiski in the white bowl and then return home.",
+#     "Place the green humanoid in the white bowl and then return to the starting position.",
+#     "Place the humanoid in the white bowl and then return home.",
+#     "Place the humanoid in the white bowl and then return to the starting position.",
+#     "Pick up the smiski and place it in the white bowl and then return home.",
+#     "Pick up the smiski and place it in the white bowl and then return to the starting position.",
+# ]
+
+# TASK_NAME = "earplug_in_bowl"
+# TASK_DESCRIPTIONS = [
+#     "Place the earplug in the bowl and then return home.",
+#     "Place the earplug in the bowl and then return to the starting position.",
+#     "Place the orange earplug in the bowl and then return home.",
+#     "Place the orange earplug in the bowl and then return to the starting position.",
+#     "Place the earplug in the white bowl and then return home.",
+#     "Place the earplug in the white bowl and then return to the starting position.",
+#     "Place the orange earplug in the white bowl and then return home.",
+#     "Place the orange earplug in the white bowl and then return to the starting position.",
+#     "Pick up the earplug and place it in the bowl and then return home.",
+#     "Pick up the earplug and place it in the bowl and then return to the starting position.",
+#     "Pick up the orange earplug and place it in the bowl and then return home.",
+#     "Pick up the orange earplug and place it in the bowl and then return to the starting position.",
+#     "Pick up the earplug and place it in the white bowl and then return home.",
+#     "Pick up the earplug and place it in the white bowl and then return to the starting position.",
+#     "Pick up the orange earplug and place it in the white bowl and then return home.",
+#     "Pick up the orange earplug and place it in the white bowl and then return to the starting position.",
+# ]
+
+# TASK_NAME = "smiski_on_container"
+# TASK_DESCRIPTIONS = [
+#     "Place the smiski on the container and then return home.",
+#     "Place the green humanoid on the container and then return home.",
+#     "Place the humanoid on the container and then return home.",
+#     "Place the smiski on the container and then return to the starting position.",
+#     "Place the green humanoid on the container and then return to the starting position.",
+#     "Place the humanoid on the container and then return to the starting position.",
+#     "Pick up the smiski and place it on the container and then return home.",
+#     "Pick up the green humanoid and place it on the container and then return home.",
+#     "Pick up the humanoid and place it on the container and then return home.",
+#     "Pick up the smiski and place it on the container and then return to the starting position.",
+#     "Pick up the green humanoid and place it on the container and then return to the starting position.",
+#     "Pick up the humanoid and place it on the container and then return to the starting position.",
+#     "Place the smiski on the white container and then return home.",
+#     "Place the green humanoid on the white container and then return home.",
+#     "Place the humanoid on the white container and then return home.",
+#     "Place the smiski on the white container and then return to the starting position.",
+#     "Place the green humanoid on the white container and then return to the starting position.",
+#     "Place the humanoid on the white container and then return to the starting position.",
+#     "Pick up the smiski and place it on the white container and then return home.",
+#     "Pick up the green humanoid and place it on the white container and then return home.",
+#     "Pick up the humanoid and place it on the white container and then return home.",
+#     "Pick up the smiski and place it on the white container and then return to the starting position.",
+#     "Pick up the green humanoid and place it on the white container and then return to the starting position.",
+#     "Pick up the humanoid and place it on the white container and then return to the starting position.",
+# ]
+
+# TASK_NAME = "object_out_of_bowl"
+# TASK_DESCRIPTIONS = [
+#     "Pick up the object from the white bowl and return home.",
+#     "Take the object out of the bowl and return to the starting position.",
+#     "Pick up the object from the bowl and return home.",
+#     "Take the object out of the white bowl and return to the starting position.",
+#     "Pick up the object from the white bowl and return to the starting position.",
+#     "Take the object out of the bowl and return home.",
+#     "Pick up the object from the bowl and return to the starting position.",
+#     "Take the object out of the white bowl and return home.",
+# ]
+
+# TASK_NAME = "chocolate_in_container"
+# TASK_DESCRIPTIONS = [
+#     "Pick up the white wrapped chocolate and place it in the container and then return home.",
+#     "Pick up the white wrapped chocolate and place it in the container and then return to the starting position.",
+#     "Pick up the white wrapped chocolate and place it in the gold container and then return home.",
+#     "Pick up the white wrapped chocolate and place it in the gold container and then return to the starting position.",
+#     "Pick up the white chocolate and put it in a slot in the container and then return home.",
+#     "Pick up the white chocolate and put it in a slot in the container and then return to the starting position.",
+#     "Pick up the white chocolate and place it in the container and then return home.",
+#     "Pick up the white chocolate and place it in the container and then return to the starting position.",
+#     "Pick up the white chocolate and place it in the gold container and then return home.",
+#     "Pick up the white chocolate and place it in the gold container and then return to the starting position.",
+#     "Place the white wrapped chocolate in the container and then return home.",
+#     "Place the white wrapped chocolate in the container and then return to the starting position.",
+#     "Place the white wrapped chocolate in the gold container and then return home.",
+#     "Place the white wrapped chocolate in the gold container and then return to the starting position.",
+#     "Place the white chocolate in the container and then return home.",
+#     "Place the white chocolate in the container and then return to the starting position.",
+#     "Place the white chocolate in the gold container and then return home.",
+#     "Place the white chocolate in the gold container and then return to the starting position.",
+# ]
+
+# TASK_NAME = "chocolate_return_home"
+# TASK_DESCRIPTIONS = [
+#     "Pick up the white wrapped chocolate and return home.",
+#     "Pick up the white wrapped chocolate and return to the starting position.",
+#     "Pick up the white wrapped chocolate and return to the starting point.",
+#     "Pick up the white wrapped chocolate and return to the starting location.",
+#     "Pick up the white wrapped chocolate and return to the starting spot.",
+#     "Pick up the white wrapped chocolate and return to the starting area.",
+#     "Pick up the white wrapped chocolate and return to the starting place.",
+#     "Take the white wrapped chocolate and return home.",
+#     "Take the white wrapped chocolate and return to the starting position.",
+#     "Take the white wrapped chocolate and return to the starting point.",
+#     "Take the white wrapped chocolate and return to the starting location.",
+#     "Take the white wrapped chocolate and return to the starting spot.",
+#     "Take the white wrapped chocolate and return to the starting area.",
+# ]
 
 
 def update_teleop(teleop, depth_camera, wrist_camera, experiment_loggers, meta):
@@ -71,10 +198,11 @@ def update_teleop(teleop, depth_camera, wrist_camera, experiment_loggers, meta):
         teleop.send_command()
 
     if args.record and was_change:
-        # don't log first 5 frames of data if gripper has object to allow for closing of gripper
+        # don't log first 20 frames of data if gripper has object to allow for closing of gripper
         STEP_COUNT += 1
-        if (meta["gripper_has_object"] is not None) and (STEP_COUNT < 20 or STEP_COUNT % 2 != 0):
+        if (meta["gripper_has_object"] is not None) and (STEP_COUNT < 20 or STEP_COUNT % 1 != 0):
             return
+        print(angles)
         for i, experiment_logger in enumerate(experiment_loggers):
             experiment_logger.log(cur_time - start_time, angles, angle_delta, depth_frames[i], wrist_frames[i], meta)
     # print(monotonic() - cur_time)
@@ -94,8 +222,8 @@ if __name__ == '__main__':
         gripper_has_object = None
     meta = {
         "gripper_has_object": gripper_has_object,
-        "task_description": TASK_DESCRIPTIONS if gripper_has_object is not None else None,
-        "task_name": TASK_NAME
+        "task_description": TASK_DESCRIPTIONS if gripper_has_object is None else None,
+        "task_name": TASK_NAME if gripper_has_object is None else "object_classification",
     }
     print(meta)
 
@@ -129,12 +257,25 @@ if __name__ == '__main__':
 
         INITIAL_ANGLES = ZERO_ANGLES.copy()
         # INITIAL_ANGLES[0] = np.random.randint(-40, 40)
-        # INITIAL_ANGLES[1] = np.random.randint(5, 20)
+        # INITIAL_ANGLES[1] = np.random.randint(-80, -70)
         # INITIAL_ANGLES[2] = np.random.randint(-10, 10)
         # INITIAL_ANGLES[3] = np.random.randint(-10, 10)
         # INITIAL_ANGLES[4] = np.random.randint(-10, 10)
         # INITIAL_ANGLES[5] = -45 + np.random.randint(-5, 5)
+        # INITIAL_ANGLES.append(np.random.randint(0, 90))  # gripper angle
         INITIAL_ANGLES.append(0)
+
+        # INITIAL_ANGLES_LOW_LIST = [
+        #     [32.512449705759785, -75.11313508773313, -8.634944463913003, -14.481487680806191, -4.873384956517791, -50.786239555347784, 90],
+        #     [0.5715873810196338, -76.06848058068296, -13.77210999883384, -3.363391481075078, -6.097538506774871, -45.42240546187409, 90],
+        #     [57.82397555794548, -61.228068088659285, -32.52440270276759, -19.92497898306997, 7.706417292251858, -46.04517188117697, 86],
+        #     [12.7790796801077, -53.1243438423419, -48.51195393540317, -6.142397267258662, -2.7504732216460854, -41.83893693888192, 90],
+        #     [-11.881724659997023, -75.80998169560529, -9.751041169212357, -7.830598193785757, -4.711289503762022, -45.09658708176744, 87],
+        #     [-4.376051576177471, -72.42863879356551, -15.918739924470398, -1.2500158352425967, 2.2192587809365465, -46.35176966300723, 89],
+        #     [12.295536293180366, -85.41520078668594, 1.3788938993145856, 3.2040390557938054, -3.0027015485645414, -47.3221599748928, 85],
+        # ]
+
+        # INITIAL_ANGLES = INITIAL_ANGLES_LOW_LIST[np.random.randint(0, len(INITIAL_ANGLES_LOW_LIST))].copy()
 
         teleop = XboxTeleop(mc, initial_angles=INITIAL_ANGLES)
 

@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.transforms import Compose
 from torch.utils.data import DataLoader, ConcatDataset
+from sentence_transformers import SentenceTransformer
 
 from behavior_cloning.utils.custom_transforms import *
 from behavior_cloning.utils.datafile import aggregate_data, split_data
@@ -29,8 +30,16 @@ device = torch.device('cuda' if torch.cuda.is_available() else device)
 
 DATA_DIR = "./run_data"
 
+# TASK_DESCRIPTION = "Place the earplug on the container and then return home."
+TASK_DESCRIPTION = "Pick up the earplug and return home."
+
 ## Get clip list
 def main():
+    model = SentenceTransformer('BAAI/bge-base-en-v1.5')
+    task_description_embedding = model.encode(TASK_DESCRIPTION).astype(np.float32, copy=False)
+    task_description_embedding = torch.tensor(task_description_embedding).to(device).unsqueeze(0)
+    del model
+
     data_path = Path(DATA_DIR)
     clip_paths = recurse_dir_for_clips(data_path, match='rgb_frames')
     
@@ -111,8 +120,8 @@ def main():
     print(f"Total val clips: {len(val_clips)}, total val frames: {len(val_loader.dataset)}")
 
     ## Define model
-    backbone_depth, latent_dim_depth = resnet10(num_channels=4)
-    backbone_wrist, latent_dim_wrist = resnet10(num_channels=3)
+    backbone_depth, latent_dim_depth = resnet10(num_channels=4, avg_pool_shape=(1, 1))
+    backbone_wrist, latent_dim_wrist = resnet10(num_channels=3, avg_pool_shape=(1, 1))
     backbone_angle = FullyConnectedNet(
         input_dim=ANGLE_FC_INPUT_DIM,
         hidden_dim=ANGLE_FC_HIDDEN_DIM,
@@ -120,14 +129,14 @@ def main():
         output_dim=ANGLE_FC_OUTPUT_DIM,
     )
     print("Neck input dim:", latent_dim_depth+latent_dim_wrist+ANGLE_FC_OUTPUT_DIM)
-    neck = FullyConnectedNet(
-        input_dim=latent_dim_depth+latent_dim_wrist+ANGLE_FC_OUTPUT_DIM,
-        hidden_dim=NECK_HIDDEN_DIM,
-        num_layers=NECK_NUM_LAYERS,
-        output_dim=NECK_OUTPUT_DIM,
-    )
-    angle_neck = FullyConnectedNet(
+    state_neck = FullyConnectedNet(
         input_dim=latent_dim_depth+latent_dim_wrist,
+        hidden_dim=OBJECT_NECK_HIDDEN_DIM,
+        num_layers=OBJECT_NUM_LAYERS,
+        output_dim=OBJECT_OUTPUT_DIM,
+    )
+    language_neck = FullyConnectedNet(
+        input_dim=latent_dim_depth+latent_dim_wrist+ANGLE_FC_OUTPUT_DIM+LANGUAGE_HIDDEN_DIM,
         hidden_dim=NECK_HIDDEN_DIM,
         num_layers=NECK_NUM_LAYERS,
         output_dim=NECK_OUTPUT_DIM,
@@ -138,34 +147,28 @@ def main():
             name='delta_angle_regression',
             loss_fn=torch.nn.MSELoss(reduction='none'),
             process_gnd_truth_fn=process_delta_angle,
-            head=TanhRegressionHead(NECK_OUTPUT_DIM, 7),
+            head=TanhRegressionHead(NECK_OUTPUT_DIM, 7, chunk_size=CHUNK_SIZE, use_task_description=True),
             type='regression',
             gt_key='delta_angle',
-            mask=None,
+            mask=[
+                lambda x: x['gripper_has_object_mask'] == 0,
+            ],
+            group_by='task_name',
         ),
-        # TrainConfigModule(
-        #     name='angle_regression',
-        #     loss_fn=torch.nn.MSELoss(reduction='none'),
-        #     process_gnd_truth_fn=lambda x: x,
-        #     head=TanhRegressionHead(NECK_OUTPUT_DIM, 7),
-        #     type='regression',
-        #     gt_key='angle',
-        #     mask=None,
-        # ),
         TrainConfigModule(
             name='gripper_has_object_classification',
             loss_fn=torch.nn.BCEWithLogitsLoss(reduction='none'),
             process_gnd_truth_fn=lambda x: x.float(),
-            head=BinaryClassificationHead(NECK_OUTPUT_DIM, 1),
+            head=BinaryClassificationHead(OBJECT_OUTPUT_DIM, 1, use_task_description=False),
             type='classification',
             gt_key='gripper_has_object',
             mask=[
                 lambda x: x['gripper_has_object_mask'] == 1,
-            ]
+            ],
         ),
     ]
 
-    model = ImageAngleNet(backbone_depth, backbone_wrist, backbone_angle, neck, angle_neck, configs).to(device)
+    model = ImageAngleNet(backbone_depth, backbone_wrist, backbone_angle, state_neck, language_neck, configs).to(device)
 
     # Reload model
     model.load_state_dict(torch.load(MODEL_PATH, map_location=device)['model_state_dict'], strict=True)
@@ -181,17 +184,20 @@ def main():
         for i in range(len(datafile)):
             batch = datafile[i]
             for key in batch:
-                batch[key] = torch.tensor(batch[key]).to(device)
+                try:
+                    batch[key] = torch.tensor(batch[key]).to(device)
+                except:
+                    continue
 
-            output = model(batch['depth_frame'].unsqueeze(0), batch['wrist_frame'].unsqueeze(0), batch['angle'].unsqueeze(0))
-
+            output = model(batch['depth_frame'].unsqueeze(0), batch['wrist_frame'].unsqueeze(0), batch['angle'].unsqueeze(0), task_description_embedding)
             # print(batch['angle']*100)
             # print(output['delta_angle_regression'][0]*6)
             # outputs.append(output['delta_angle_regression'][0]*6)
-            angle_delta = output['delta_angle_regression'][0]
-            angle_delta[:6] = angle_delta[:6] * 4
-            angle_delta[6] = angle_delta[6] * 6
-            outputs.append(angle_delta)
+            # import IPython; IPython.embed(); exit(0)
+            # angle_delta = output['delta_angle_regression'][0]
+            # angle_delta[:6] = angle_delta[:6] * 4
+            # angle_delta[6] = angle_delta[6] * 6
+            # outputs.append(angle_delta)
             print("Gripper has object p: ", float(F.sigmoid(output['gripper_has_object_classification']).detach().cpu().numpy()))
 
             # mse = torch.mean((output['delta_angle_regression'][0] - batch['delta_angle'] / 30)**2)

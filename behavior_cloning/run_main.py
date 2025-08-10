@@ -2,6 +2,8 @@ from pathlib import Path
 import sys
 import time
 import copy
+import hashlib
+import json
 from time import monotonic
 from time import sleep
 import os
@@ -13,6 +15,7 @@ import torch.nn.functional as F
 from torchvision.transforms import Compose
 from torch.utils.data import DataLoader, ConcatDataset
 from pymycobot.mycobot280 import MyCobot280
+from sentence_transformers import SentenceTransformer
 
 from behavior_cloning.utils.custom_transforms import *
 from behavior_cloning.utils.train_configs import TrainConfigModule, process_delta_angle
@@ -36,8 +39,35 @@ np.random.seed(0)
 device = 'mps' if torch.backends.mps.is_available() else 'cpu'
 device = torch.device('cuda' if torch.cuda.is_available() else device)
 
+# open task_description_embedding_dict.json
+with open('task_description_embedding_dict.json', 'r') as f:
+    task_description_embedding_dict = json.load(f)
+
+# device = 'cpu'
+
+# TASK_DESCRIPTION = "Place the earplug on the container and then return home."
+TASK_DESCRIPTION = "Pick up the earplug and return home."
+# TASK_DESCRIPTION = "Place the smiski in the bowl and then return home."
+# TASK_DESCRIPTION = "Place the gold chocolate in the bowl and then return home."
+# TASK_DESCRIPTION = "Place the earplug in the bowl and then return home."
+# TASK_DESCRIPTION = "Pick up the object from the white bowl and return home."
+# TASK_DESCRIPTION = "Place the smiski on the container and then return home."
+# TASK_DESCRIPTION = "Pick up the gold wrapped chocolate and place it in the container and then return home."
+# TASK_DESCRIPTION = "Pick up the white wrapped chocolate and return home."
 
 def main(mc, depth_camera, wrist_camera):
+    ## Get text embedding
+    model = SentenceTransformer('BAAI/bge-base-en-v1.5')
+    task_description_embedding = model.encode(TASK_DESCRIPTION).astype(np.float32, copy=False)
+    task_description_embedding = torch.tensor(task_description_embedding).to(device).unsqueeze(0)
+
+    # task hash
+    # task_hash = hashlib.md5(TASK_DESCRIPTION.encode()).hexdigest()
+    # if task_hash in task_description_embedding_dict:
+    #     task_description_embedding = torch.tensor(task_description_embedding_dict[task_hash]).to(device).unsqueeze(0)
+
+    del model
+
     ## Define transforms
     frame_transform_list = [
         ResizeImage(mode='half'),
@@ -63,20 +93,36 @@ def main(mc, depth_camera, wrist_camera):
     composed_wrist_frame_transform = Compose(frame_transform_list)
 
     ## Define model
-    backbone_depth, latent_dim_depth = resnet10(num_channels=4)
-    backbone_wrist, latent_dim_wrist = resnet10(num_channels=3)
+    backbone_depth, latent_dim_depth = resnet10(num_channels=4, avg_pool_shape=(2, 2), last_activation='none')
+    backbone_wrist, latent_dim_wrist = resnet10(num_channels=3, avg_pool_shape=(1, 1), last_activation='none')
+    latent_dim_wrist = 3136*2
+    latent_dim_depth = 3136*2
     backbone_angle = FullyConnectedNet(
         input_dim=ANGLE_FC_INPUT_DIM,
         hidden_dim=ANGLE_FC_HIDDEN_DIM,
         num_layers=ANGLE_FC_NUM_LAYERS,
         output_dim=ANGLE_FC_OUTPUT_DIM,
+        final_batchnorm=True,
     )
     print("Neck input dim:", latent_dim_depth+latent_dim_wrist+ANGLE_FC_OUTPUT_DIM)
-    neck = FullyConnectedNet(
-        input_dim=latent_dim_depth+latent_dim_wrist+ANGLE_FC_OUTPUT_DIM,
+    state_neck = FullyConnectedNet(
+        input_dim=latent_dim_wrist,
+        hidden_dim=OBJECT_NECK_HIDDEN_DIM,
+        num_layers=OBJECT_NUM_LAYERS,
+        output_dim=OBJECT_OUTPUT_DIM,
+    )
+    language_neck = FullyConnectedNet(
+        input_dim=latent_dim_depth+latent_dim_wrist+ANGLE_FC_OUTPUT_DIM+LANGUAGE_HIDDEN_DIM,
         hidden_dim=NECK_HIDDEN_DIM,
         num_layers=NECK_NUM_LAYERS,
         output_dim=NECK_OUTPUT_DIM,
+    )
+    language_stem = FullyConnectedNet(
+        input_dim=LANGUAGE_INPUT_DIM,
+        hidden_dim=LANGUAGE_HIDDEN_DIM,
+        num_layers=LANGUAGE_STEM_NUM_LAYERS,
+        output_dim=LANGUAGE_HIDDEN_DIM,
+        final_batchnorm=True,
     )
 
     configs = [
@@ -84,37 +130,31 @@ def main(mc, depth_camera, wrist_camera):
             name='delta_angle_regression',
             loss_fn=torch.nn.MSELoss(reduction='none'),
             process_gnd_truth_fn=process_delta_angle,
-            head=TanhRegressionHead(NECK_OUTPUT_DIM, 7, chunk_size=5),
+            head=TanhRegressionHead(NECK_OUTPUT_DIM, 7, chunk_size=CHUNK_SIZE, use_task_description=True),
             type='regression',
             gt_key='delta_angle',
-            mask=None,
+            mask=[
+                lambda x: x['gripper_has_object_mask'] == 0,
+            ],
+            group_by='task_name',
         ),
-        # TrainConfigModule(
-        #     name='angle_regression',
-        #     loss_fn=torch.nn.MSELoss(reduction='none'),
-        #     process_gnd_truth_fn=lambda x: x,
-        #     head=TanhRegressionHead(NECK_OUTPUT_DIM, 7),
-        #     type='regression',
-        #     gt_key='angle',
-        #     mask=None,
-        # ),
         TrainConfigModule(
             name='gripper_has_object_classification',
             loss_fn=torch.nn.BCEWithLogitsLoss(reduction='none'),
             process_gnd_truth_fn=lambda x: x.float(),
-            head=BinaryClassificationHead(NECK_OUTPUT_DIM, 1),
+            head=BinaryClassificationHead(OBJECT_OUTPUT_DIM, 1, use_task_description=False),
             type='classification',
             gt_key='gripper_has_object',
             mask=[
                 lambda x: x['gripper_has_object_mask'] == 1,
-            ]
+            ],
         ),
     ]
 
-    model = ImageAngleNet(backbone_depth, backbone_wrist, backbone_angle, neck, configs).to(device)
+    model = ImageAngleNet(backbone_depth, backbone_wrist, backbone_angle, state_neck, language_neck, language_stem, configs).to(device)
 
     # Reload model
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=device)['model_state_dict'], strict=False)
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=device)['model_state_dict'], strict=True)
 
     model = model.to(device)
     model.print_num_params()
@@ -130,6 +170,7 @@ def main(mc, depth_camera, wrist_camera):
     index = 0
     prev_angle_deltas = []
     alpha = 0.4  # Exponential averaging factor
+
     while True:
         start = time.time()
         depth_frame_raw = depth_camera.get_frame()
@@ -139,13 +180,38 @@ def main(mc, depth_camera, wrist_camera):
 
         wrist_frame_raw = wrist_camera.get_frame()
         wrist_frame = composed_wrist_frame_transform(wrist_frame_raw.extract_rgb_frame())
+        # print(time.time() - start)
 
-        output = model(torch.tensor([depth_frame]).to(device), torch.tensor([wrist_frame]).to(device), torch.tensor([angles]).float().to(device) / 100)
+        # depth_frame = depth_frame[:3]
+        # start = time.time()
+        with torch.no_grad():
+            output = model(
+                torch.tensor([depth_frame]).to(device), 
+                torch.tensor([wrist_frame]).to(device), 
+                torch.tensor([angles]).float().to(device) / 100, 
+                task_description_embedding
+            )
+
+        # print(time.time() - start)
 
         angle_deltas = output['delta_angle_regression'][0].detach().cpu().numpy()
         angle_deltas[:, :6] *= 4
         angle_deltas[:, 6] *= 6
 
+        # RUN ALL ANGLE DELTA
+        # for i in range(2):
+        #     old_angles = angles.copy()
+        #     angles[:6] = angles[:6] + angle_deltas[i, :6]
+        #     angles[6] = int(np.clip(angles[6] + angle_deltas[i, 6], 0, 90))
+        #     mc.send_angles(list(angles)[:6], 60)
+        #     sleep(0.1)
+        #     if abs(angles[6] - old_angles[6]) < 1:
+        #         pass
+        #     else:
+        #         sleep(0.03)
+        #         mc.set_gripper_value(int(angles[6]), 40)
+
+        # AGGREGATE ANGLE DELTA
         prev_angle_deltas.append(angle_deltas.copy())
         if len(prev_angle_deltas) > 5:
             prev_angle_deltas.pop(0)
@@ -165,19 +231,17 @@ def main(mc, depth_camera, wrist_camera):
         angles[6] = int(np.clip(angles[6], 0, 90))
 
         mc.send_angles(list(angles)[:6], 60)
-        # sleep(0.0)
         if abs(angles[6] - old_angles[6]) < 1:
             pass
         else:
             sleep(0.03)
             mc.set_gripper_value(int(angles[6]), 40)
-            # sleep(0.03)
 
         # print(angle_delta)
         print("Gripper has object p: ", float(F.sigmoid(output['gripper_has_object_classification']).detach().cpu().numpy()))
 
-        # if float(F.sigmoid(output['gripper_has_object_classification']).detach().cpu().numpy()) > 0.5:
-        #     experiment_logger.log(monotonic() - start_time, old_angles, angle_delta, depth_frame_raw, wrist_frame_raw, {'gripper_has_object': False})
+        # if float(F.sigmoid(output['gripper_has_object_classification']).detach().cpu().numpy()) > 0.2:
+        # experiment_logger.log(monotonic() - start_time, old_angles, angle_delta, depth_frame_raw, wrist_frame_raw, {'gripper_has_object': False, "task_name": "object_classification"})
 
         # wait for key press
         # while True:

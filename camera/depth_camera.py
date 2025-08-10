@@ -46,16 +46,20 @@ class DepthCamera():
         config = rs.config()
         config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 60)
         config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 60)
-        profile = self.pipeline.start(config)
+        self.profile = self.pipeline.start(config)
 
-        # turn off autoexposure to remove noise
-        depth_sensor = profile.get_device().query_sensors()[1]
-        depth_sensor.set_option(rs.option.enable_auto_exposure, False)
+        self.depth_sensor = self.profile.get_device().query_sensors()[1]
+        self.depth_sensor.set_option(rs.option.enable_auto_exposure, False)
+        # self.autoexpose_counter = 0
 
         align_to = rs.stream.color
         self.align = rs.align(align_to)
 
     def get_frame(self):
+        # if self.autoexpose_counter == 15:
+        #     self.depth_sensor.set_option(rs.option.enable_auto_exposure, False)
+        # self.autoexpose_counter += 1
+
         frame = self.pipeline.wait_for_frames()
         aligned_frames = self.align.process(frame)
 
@@ -84,9 +88,20 @@ if __name__ == "__main__":
         #     cv2.imshow("diff", diff / 1000)
         #     if cv2.waitKey(1) & 0xFF == ord('q'):
         #         break
+
+        # save image
+        # cv2.imwrite("rgb_frame.png", frame.extract_rgb_frame())
+        # depth_frame = frame.extract_depth_frame()
+        # # save depth frame as heatmap
+        # depth_frame_normalized = cv2.normalize(depth_frame, None, 0, 255, cv2.NORM_MINMAX)
+        # depth_frame_colored = cv2.applyColorMap(depth_frame_normalized.astype(np.uint8), cv2.COLORMAP_JET)
+        # cv2.imwrite("depth_frame_colored.png", depth_frame_colored)
+        # cv2.imwrite("depth_frame.png", frame.extract_depth_frame())
+
+
         # render rgb frame
-        # cv2.imshow("rgb", frame.extract_rgb_frame())
-        cv2.imshow("depth", frame.extract_depth_frame() / 1000)
+        cv2.imshow("rgb", frame.extract_rgb_frame())
+        # cv2.imshow("depth", frame.extract_depth_frame() / 1000)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
