@@ -16,7 +16,7 @@ class ImageAngleNet(nn.Module):
         self.language_neck = language_neck
         self.language_stem = language_stem
         
-        # self.language_embeddings = nn.Embedding(182, LANGUAGE_INPUT_DIM)
+        # self.language_embeddings = nn.Embedding(len(os.listdir(TASK_DESCRIPTION_CACHE_PATH)), LANGUAGE_INPUT_DIM)
 
         self.heads = nn.ModuleDict()
         for config in configs:

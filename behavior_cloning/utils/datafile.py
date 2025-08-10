@@ -1,19 +1,31 @@
 import os
 import cv2
-import json
+import orjson
 import hashlib
 import multiprocessing
 import numpy as np
 from pathlib import Path
 from collections import OrderedDict
 import matplotlib.pyplot as plt
+from PIL import Image
 
 from torch.utils.data import Dataset
 
 from shared_utils.path_utils import recurse_dir_for_clips
 from camera.depth_camera import DepthFrame
 from behavior_cloning.configs.path_config import TASK_DESCRIPTION_CACHE_PATH
-from behavior_cloning.configs.nn_config import LANGUAGE_HIDDEN_DIM
+from behavior_cloning.configs.nn_config import LANGUAGE_INPUT_DIM
+
+import cProfile
+
+def profileit(func):
+    def wrapper(*args, **kwargs):
+        datafn = func.__name__ + ".profile" # Name the data file sensibly
+        prof = cProfile.Profile()
+        retval = prof.runcall(func, *args, **kwargs)
+        prof.dump_stats(datafn)
+        return retval
+    return wrapper
 
 class DataFile(Dataset):
     def __init__(self,
@@ -29,7 +41,7 @@ class DataFile(Dataset):
         self.clip_path = clip_path
         self.clip_name = os.path.join(*clip_path.split('/')[-2:])
         self.angle_path = os.path.join(clip_path, 'angles')
-        self.angle_delta_path = os.path.join(clip_path, 'angle_delta')
+        self.angle_delta_path = os.path.join(clip_path, 'angle_delta_memmap')
         self.meta_path = os.path.join(clip_path, 'meta')
         self.depth_frames_path = os.path.join(clip_path, 'depth_frames')
         self.rgb_frames_path = os.path.join(clip_path, 'rgb_frames')
@@ -39,6 +51,12 @@ class DataFile(Dataset):
         self.augmentations = augmentations
         self.angle_augmentations = angle_augmentations
         self.chunk_size = chunk_size
+        
+        # get hex names from TASK_DESCRIPTION_CACHE_PATH and make nn embedding dict of them
+        self.task_description_embedding_dict = {}
+        for i, task_description_embedding_path in enumerate(os.listdir(TASK_DESCRIPTION_CACHE_PATH)):
+            hex = task_description_embedding_path.split('.')[0]
+            self.task_description_embedding_dict[hex] = [i]
 
         self.idx_to_frame_name = OrderedDict()
         # path names are float, so we need to sort them as floats
@@ -50,6 +68,7 @@ class DataFile(Dataset):
     def __len__(self):
         return max(len(os.listdir(self.angle_path)) - self.chunk_size, 0)
 
+    # @profileit
     def __getitem__(self, idx):
         # check if idx is within bounds
         if idx >= len(self):
@@ -69,15 +88,20 @@ class DataFile(Dataset):
         for i in range(self.chunk_size):
             delta_angle.append(self.get_angle_delta(self.idx_to_frame_name[idx + i]))
         delta_angle = np.stack(delta_angle)
-
-        if 'task_description' in meta and meta['task_description'] is not None:
-            task_description = meta['task_description'][np.random.randint(len(meta['task_description']))]
-            task_description_embedding = self.get_task_description_embedding(task_description)
-        else:
-            task_description_embedding = np.zeros(LANGUAGE_HIDDEN_DIM, dtype=np.float32)
-
+        
         weight = np.float32(1.0)
 
+        if 'task_description' in meta and meta['task_description'] is not None:
+            # task_id = np.random.randint(len(meta['task_description']))
+            task_id = 0
+            task_description = meta['task_description'][task_id]
+            task_description_embedding = self.get_task_description_embedding(task_description)
+            # if task_description == "Pick up the earplug and return home.":
+            #     weight = np.float32(0.2)
+        else:
+            # task_description_embedding = [0]
+            task_description_embedding = np.zeros(LANGUAGE_INPUT_DIM, dtype=np.float32)
+        # task_description_embedding = np.zeros(LANGUAGE_INPUT_DIM, dtype=np.float32)
         return {
             'depth_frame': depth_frame,
             'wrist_frame': wrist_frame,
@@ -104,6 +128,8 @@ class DataFile(Dataset):
         if self.depth_frame_transform:
             frame = self.depth_frame_transform(frame)
 
+        # frame = frame[:3]
+
         return frame
     
 
@@ -122,19 +148,20 @@ class DataFile(Dataset):
     def get_angle(self, frame_name):
         # angle = np.loadtxt(os.path.join(self.angle_path, f'{frame_name}.csv')).astype(np.float32)
         with open(os.path.join(self.angle_path, f'{frame_name}.csv'), 'r') as f:
-            angle = np.array([float(line) for line in f.readlines()]).astype(np.float32)
+            angle = np.array([float(line) for line in f.readlines()]).astype(np.float32, copy=False)
 
         if self.angle_augmentations:
             angle = self.angle_augmentations(angle)
 
         return angle
-    
+
 
     def get_angle_delta(self, frame_name):
         # angle_delta = np.loadtxt(os.path.join(self.angle_delta_path, f'{frame_name}.csv')).astype(np.float32)
         # same as above but faster
-        with open(os.path.join(self.angle_delta_path, f'{frame_name}.csv'), 'r') as f:
-            angle_delta = np.array([float(line) for line in f.readlines()]).astype(np.float32)
+        # with open(os.path.join(self.angle_delta_path, f'{frame_name}.csv'), 'r') as f:
+        #     angle_delta = np.array([float(line) for line in f.readlines()]).astype(np.float32, copy=False)
+        angle_delta = np.memmap(os.path.join(self.angle_delta_path, f'{frame_name}.bin'), dtype=np.float32, mode='r', shape=(7,))
 
         return angle_delta
     
@@ -145,16 +172,17 @@ class DataFile(Dataset):
             return {}
 
         with open(meta_path, 'r') as f:
-            meta = json.load(f)
+            meta = orjson.loads(f.read())
 
             return meta
 
 
     def get_task_description_embedding(self, task_description):
         description_hash = hashlib.md5(task_description.encode()).hexdigest()
+        # return self.task_description_embedding_dict[description_hash]
         cache_path = os.path.join(TASK_DESCRIPTION_CACHE_PATH, f'{description_hash}.npy')
-        return np.load(cache_path).astype(np.float32, copy=False)
-
+        # load numpy memmap
+        return np.memmap(cache_path, dtype=np.float32, mode='r', shape=(LANGUAGE_INPUT_DIM,))
 
 
 def aggregate_data(clip_paths, depth_frame_transform=None, wrist_frame_transform=None, angle_transform=None, augmentations=None, angle_augmentations=None, chunk_size=1, num_workers=1):

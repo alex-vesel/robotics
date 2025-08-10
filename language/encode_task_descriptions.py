@@ -4,7 +4,7 @@ import sys
 import numpy as np
 import hashlib
 import os
-import json
+import orjson
 from tqdm import tqdm
 sys.path.append(".")
 
@@ -23,7 +23,7 @@ for clip_path in tqdm(clip_paths):
 
     for meta_file in os.listdir(meta_path):
         with open(os.path.join(meta_path, meta_file)) as f:
-            meta = json.load(f)
+            meta = orjson.loads(f.read())
 
         if 'task_description' in meta and meta['task_description'] is not None:
             for task_description in meta['task_description']:
@@ -38,5 +38,6 @@ model = SentenceTransformer('BAAI/bge-base-en-v1.5')
 for task_description in tqdm(task_description_set):
     encoded_task_description = model.encode(task_description).astype(np.float32, copy=False)
     description_hash = hashlib.md5(task_description.encode()).hexdigest()
-    with open(os.path.join(TASK_DESCRIPTION_CACHE_PATH, f'{description_hash}.npy'), 'wb') as f:
-        np.save(f, encoded_task_description)
+
+    memmap = np.memmap(os.path.join(TASK_DESCRIPTION_CACHE_PATH, f'{description_hash}.npy'), dtype=np.float32, mode='w+', shape=encoded_task_description.shape)
+    memmap[:] = encoded_task_description[:]

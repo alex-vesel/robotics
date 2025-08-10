@@ -360,7 +360,7 @@ class ResNet(nn.Module):
         # x = self.final_bn(x)
 
         return out
-    
+
 
 class SimpleCNN(nn.Module):
     def __init__(self):

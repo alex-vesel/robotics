@@ -121,8 +121,7 @@ class VerticalFlip(BaseTransform):
             if 'metadata' in x:
                 x['metadata']['target_y_percent'] *= -1
         return x
-
-    
+ 
 class HorizontalFlip(BaseTransform):
     def __init__(self, p=0.0):
         super(HorizontalFlip, self).__init__()

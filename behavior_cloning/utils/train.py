@@ -1,6 +1,7 @@
 import sys
 from time import monotonic
 from tqdm import tqdm
+from collections import defaultdict
 
 import torch
 import numpy as np
@@ -27,11 +28,12 @@ def train_model(train_loader, val_loader, model, configs, optimizer, scheduler, 
             total_loss = 0
             for config in configs:
                 subtask_loss = config.get_loss(output[config.name], batch, split='train', weight=batch['weight'], meta={'task_name': batch['task_name']})
-                for key, loss in subtask_loss.items():
-                    if torch.isnan(loss):
+                for key, loss_output in subtask_loss.items():
+                    if torch.isnan(loss_output.loss_value):
                         continue
-                    subtask_losses[key] = loss
-                    total_loss += loss
+                    loss_output.loss_value *= loss_output.count / BATCH_SIZE
+                    subtask_losses[key] = loss_output.loss_value
+                    total_loss += loss_output.loss_value
 
             if total_loss > 0:
                 subtask_losses['total_loss'] = total_loss
@@ -61,6 +63,7 @@ def train_model(train_loader, val_loader, model, configs, optimizer, scheduler, 
         logger.log_scalar('utils/lr', optimizer.param_groups[0]['lr'], epoch)
 
         val_losses = []
+        subtask_counts = defaultdict(int)
         model.eval()
         with torch.no_grad():
             for batch in val_loader:
@@ -72,17 +75,13 @@ def train_model(train_loader, val_loader, model, configs, optimizer, scheduler, 
                 output = model(batch['depth_frame'], batch['wrist_frame'], batch['angle'], batch['task_description_embedding'])
 
                 subtask_losses = {}
-                total_loss = 0
                 for config in configs:
                     subtask_loss = config.get_loss(output[config.name], batch, split='train', weight=batch['weight'], meta={'task_name': batch['task_name']})
-                    for key, loss in subtask_loss.items():
-                        if torch.isnan(loss):
+                    for key, loss_output in subtask_loss.items():
+                        if torch.isnan(loss_output.loss_value):
                             continue
-                        subtask_losses[key] = loss
-                        total_loss += loss
-
-                if total_loss > 0:
-                    subtask_losses['total_loss'] = total_loss
+                        subtask_losses[key] = loss_output.loss_value * loss_output.count
+                        subtask_counts[key] += loss_output.count
 
                 val_losses.append(subtask_losses)
 
@@ -91,10 +90,15 @@ def train_model(train_loader, val_loader, model, configs, optimizer, scheduler, 
         unique_keys = set()
         for loss in val_losses:
             unique_keys.update(loss.keys())
+            
+        total_loss = 0
         for key in unique_keys:
-            avg_loss = np.mean([float(loss[key].detach().cpu().numpy()) for loss in val_losses if key in loss])
+            avg_loss = np.sum([float(loss[key].detach().cpu().numpy()) for loss in val_losses if key in loss]) / subtask_counts[key]
             avg_losses[key] = avg_loss
+            total_loss += avg_loss
             logger.log_scalar(f'val/{key}', avg_loss, num_steps)
+        avg_losses['total_loss'] = total_loss
+        logger.log_scalar(f'val/total_loss', total_loss, num_steps)
 
         # save model
         if epoch % SAVE_EPOCHS == 0:

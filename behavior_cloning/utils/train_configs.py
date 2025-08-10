@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from dataclasses import dataclass
 
 
 def process_delta_angle(delta_angle):
@@ -8,6 +9,12 @@ def process_delta_angle(delta_angle):
     delta_angle[:, :, 6] /= 6
     return delta_angle
     # return delta_angle / 6
+    
+    
+@dataclass
+class LossOutput():
+    loss_value: torch.Tensor
+    count: int
 
 
 class TrainConfigModule():
@@ -24,10 +31,13 @@ class TrainConfigModule():
 
 
     def get_loss(self, outputs, batch, split=None, weight=None, meta=None):
+        outputs = outputs.squeeze()
+        if len(outputs.shape) == 0:
+            outputs = outputs.unsqueeze(0)
         if self.type == "likelihood":
             losses = self.loss_fn(outputs[:, :2], self.process_gnd_truth_fn(delta_angle), var=outputs[:, 2])
         else:
-            losses = self.loss_fn(outputs.squeeze(), self.process_gnd_truth_fn(batch[self.gt_key]))
+            losses = self.loss_fn(outputs, self.process_gnd_truth_fn(batch[self.gt_key]))
 
         losses *= self.weight
         if len(losses.shape) > 1:
@@ -46,12 +56,12 @@ class TrainConfigModule():
         output = {}
         if self.group_by is not None and meta is not None:
             # partition losses into by group by
-            group_by = np.array(meta[self.group_by])[mask.bool()]
+            group_by = np.array(meta[self.group_by])[mask.bool().cpu().numpy()]
             for group in set(group_by):
                 group_losses = losses[group_by==group]
-                output[str(group)] = group_losses.mean()
+                output[str(group)] = LossOutput(loss_value=group_losses.mean(), count=len(group_losses))
         else:
-            output[self.name] = losses.mean()
+            output[self.name] = LossOutput(loss_value=losses.mean(), count=len(losses))
 
         return output
 

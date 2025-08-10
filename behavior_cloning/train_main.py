@@ -134,20 +134,36 @@ def main():
     print(f"Total val clips: {len(val_clips)}, total val frames: {len(val_loader.dataset)}")
 
     ## Define model
-    backbone_depth, latent_dim_depth = resnet10(num_channels=4)
-    backbone_wrist, latent_dim_wrist = resnet10(num_channels=3)
+    backbone_depth, latent_dim_depth = resnet10(num_channels=4, avg_pool_shape=(2, 2), last_activation='none')
+    backbone_wrist, latent_dim_wrist = resnet10(num_channels=3, avg_pool_shape=(1, 1), last_activation='none')
+    latent_dim_wrist = 3136*2
+    latent_dim_depth = 3136*2
     backbone_angle = FullyConnectedNet(
         input_dim=ANGLE_FC_INPUT_DIM,
         hidden_dim=ANGLE_FC_HIDDEN_DIM,
         num_layers=ANGLE_FC_NUM_LAYERS,
         output_dim=ANGLE_FC_OUTPUT_DIM,
+        final_batchnorm=True,
     )
     print("Neck input dim:", latent_dim_depth+latent_dim_wrist+ANGLE_FC_OUTPUT_DIM)
-    neck = FullyConnectedNet(
-        input_dim=latent_dim_depth+latent_dim_wrist+ANGLE_FC_OUTPUT_DIM,
+    state_neck = FullyConnectedNet(
+        input_dim=latent_dim_wrist,
+        hidden_dim=OBJECT_NECK_HIDDEN_DIM,
+        num_layers=OBJECT_NUM_LAYERS,
+        output_dim=OBJECT_OUTPUT_DIM,
+    )
+    language_neck = FullyConnectedNet(
+        input_dim=latent_dim_depth+latent_dim_wrist+ANGLE_FC_OUTPUT_DIM+LANGUAGE_HIDDEN_DIM,
         hidden_dim=NECK_HIDDEN_DIM,
         num_layers=NECK_NUM_LAYERS,
         output_dim=NECK_OUTPUT_DIM,
+    )
+    language_stem = FullyConnectedNet(
+        input_dim=LANGUAGE_INPUT_DIM,
+        hidden_dim=LANGUAGE_HIDDEN_DIM,
+        num_layers=LANGUAGE_STEM_NUM_LAYERS,
+        output_dim=LANGUAGE_HIDDEN_DIM,
+        final_batchnorm=True,
     )
 
     configs = [
@@ -155,7 +171,7 @@ def main():
             name='delta_angle_regression',
             loss_fn=torch.nn.MSELoss(reduction='none'),
             process_gnd_truth_fn=process_delta_angle,
-            head=TanhRegressionHead(NECK_OUTPUT_DIM+LANGUAGE_HIDDEN_DIM, 7, chunk_size=CHUNK_SIZE, use_task_description=True),
+            head=TanhRegressionHead(NECK_OUTPUT_DIM, 7, chunk_size=CHUNK_SIZE, use_task_description=True),
             type='regression',
             gt_key='delta_angle',
             mask=[
@@ -167,7 +183,7 @@ def main():
             name='gripper_has_object_classification',
             loss_fn=torch.nn.BCEWithLogitsLoss(reduction='none'),
             process_gnd_truth_fn=lambda x: x.float(),
-            head=BinaryClassificationHead(NECK_OUTPUT_DIM, 1, use_task_description=False),
+            head=BinaryClassificationHead(OBJECT_OUTPUT_DIM, 1, use_task_description=False),
             type='classification',
             gt_key='gripper_has_object',
             mask=[
@@ -176,7 +192,7 @@ def main():
         ),
     ]
 
-    model = ImageAngleNet(backbone_depth, backbone_wrist, backbone_angle, neck, configs).to(device)
+    model = ImageAngleNet(backbone_depth, backbone_wrist, backbone_angle, state_neck, language_neck, language_stem, configs).to(device)
 
     # Reload model
     if RELOAD_MODEL:

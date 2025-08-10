@@ -46,7 +46,8 @@ for clip_path in clip_paths:
         if meta['gripper_has_object'] is not None:
             meta['task_name'] = "object_classification"
         else:
-            meta['task_name'] = TASK_NAME
+            continue
+            # meta['task_name'] = TASK_NAME
 
         with open(os.path.join(meta_path, meta_file), 'w') as f:
             json.dump(meta, f)

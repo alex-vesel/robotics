@@ -185,3 +185,5 @@ teleop/data_wrist/
 teleop/data_wrist_presave/
 *.pth
 run_data/
+*.profile
+.cache.zip
